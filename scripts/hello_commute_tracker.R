@@ -5,14 +5,11 @@ cat("Hello from commute-tracker\n")
 cat("Timestamp:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
 cat("Working directory:", getwd(), "\n")
 
-output_path <- file.path("data", "hello_output.txt")
-
-writeLines(
-  text = c(
-    "This file was created by an automated R script.",
-    paste("Created at:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"))
-  ),
-  con = output_path
+result_df <- data.frame(
+  run_timestamp = as.POSIXct(Sys.time(), tz = "UTC"),
+  runner = Sys.info()[["nodename"]],
+  working_directory = getwd(),
+  stringsAsFactors = FALSE
 )
 
-cat("Wrote file to:", output_path, "\n")
+print(result_df)
