@@ -30,8 +30,6 @@ collect_commute_metadata <- function() {
     baseline_duration_seconds = 1200,                  # 20 min
     preferred_route_current_duration_seconds = 1800,   # 30 min
 
-    override_flag = TRUE,
-
     stringsAsFactors = FALSE
   )
 
@@ -48,9 +46,32 @@ write_to_google_sheets <- function(df) {
   message("write_to_google_sheets(): not implemented yet")
 }
 
+############################################
+# 3. Function: decide_route_override()
+#    - This logic determines whether to deviate from the preferred route
+############################################
+
+decide_route_override <- function(
+  baseline_seconds,
+  preferred_seconds,
+  best_alternative_seconds,
+  threshold_seconds = 120
+) {
+  preferred_delay_seconds <- preferred_seconds - baseline_seconds
+
+  override_flag <-
+    preferred_delay_seconds >= threshold_seconds &
+    best_alternative_seconds < preferred_seconds
+
+  list(
+    override_flag = override_flag,
+    preferred_delay_seconds = preferred_delay_seconds,
+    delta_seconds = preferred_seconds - best_alternative_seconds
+  )
+}
 
 ############################################
-# 3. Main execution block
+# 4. Main execution block
 #    - This is where things RUN
 ############################################
 
