@@ -4,7 +4,6 @@
 suppressPackageStartupMessages({
   library(dplyr)
   library(googlesheets4)
-  library(googleAuthR)
 })
 
 gs4_auth()
@@ -31,14 +30,6 @@ collect_commute_metadata <- function() {
 
     stringsAsFactors = FALSE
   )
-}
-
-############################################
-# 2. Function: write_to_google_sheets()
-############################################
-
-write_to_google_sheets <- function(df) {
-  message("write_to_google_sheets(): not implemented yet")
 }
 
 ############################################
@@ -116,16 +107,6 @@ decision <- decide_route_override(
 )
 
 ############################################
-# 4D. FINAL ROUTE SELECTION  ⭐ NEW ⭐
-############################################
-
-selected_route_id <- if (decision$override_flag) {
-  best_alternative_route$route_id
-} else {
-  commute_df$preferred_route_id
-}
-
-############################################
 # 4E. Final decision record
 ############################################
 
@@ -134,7 +115,6 @@ commute_df_decision <- cbind(
   decision
 )
 
-# Add deterministic event_id
 commute_df_decision$event_id <- paste0(
   format(commute_df_decision$run_timestamp_local, "%Y%m%d%H%M%S"),
   "_",
@@ -146,7 +126,7 @@ commute_df_decision$event_id <- paste0(
 ############################################
 
 commute_df_minutes <- transform(
-  commute_df_final,
+  commute_df_decision,
   estimated_duration_minutes = estimated_duration_seconds / 60,
   baseline_duration_minutes = baseline_duration_seconds / 60,
   preferred_route_current_duration_minutes =
@@ -161,12 +141,15 @@ print(routes_df)
 cat("\n")
 print(best_alternative_route)
 cat("\n")
-print(commute_df_final)
+print(commute_df_decision)
 cat("\n")
 print(commute_df_minutes)
 cat("\n")
 
+############################################
 # Append one row to Google Sheets
+############################################
+
 sheet_append(
   ss = "1H2v-4LtmCDUu534Qo81d8IxZ4efsGJoNZ2b7RaBK2Ro",
   data = commute_df_decision
