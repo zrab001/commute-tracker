@@ -111,6 +111,18 @@ routes_df <- data.frame(
 print(routes_df)
 cat("\n")
 
+############################################
+# 4B. Select best alternative route
+############################################
+
+best_alternative_route <- routes_df[
+  !routes_df$is_preferred &
+    routes_df$estimated_duration_seconds ==
+      min(routes_df$estimated_duration_seconds[!routes_df$is_preferred]),
+  ]
+
+print(best_alternative_route)
+cat("\n")
 
 #Calculating metrics
 threshold_seconds <- 120  # 2 minutes
