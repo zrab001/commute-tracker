@@ -129,10 +129,16 @@ selected_route_id <- if (decision$override_flag) {
 # 4E. Final decision record
 ############################################
 
-commute_df_final <- cbind(
+commute_df_decision <- cbind(
   commute_df,
-  decision,
-  selected_route_id = selected_route_id
+  decision
+)
+
+# Add deterministic event_id
+commute_df_decision$event_id <- paste0(
+  format(commute_df_decision$run_timestamp_local, "%Y%m%d%H%M%S"),
+  "_",
+  commute_df_decision$direction
 )
 
 ############################################
@@ -161,3 +167,10 @@ print(commute_df_minutes)
 cat("\n")
 
 write_to_google_sheets(commute_df_final)
+
+
+# Append one row to Google Sheets
+sheet_append(
+  ss = "1H2v-4LtmCDUu534Qo81d8IxZ4efsGJoNZ2b7RaBK2Ro",
+  data = commute_df_decision
+)
