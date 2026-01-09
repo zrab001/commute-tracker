@@ -2,7 +2,6 @@
 # Commute Tracker – Hello World Pipeline
 ############################################
 suppressPackageStartupMessages({
-  library(dplyr)
   library(googlesheets4)
 })
 
@@ -33,7 +32,7 @@ collect_commute_metadata <- function() {
 }
 
 ############################################
-# 3. Function: decide_route_override()
+# 2. Function: decide_route_override()
 ############################################
 
 decide_route_override <- function(
@@ -56,7 +55,7 @@ decide_route_override <- function(
 }
 
 ############################################
-# 4. Main execution block
+# 3. Main execution block
 ############################################
 
 cat("Hello from commute-tracker\n")
@@ -66,7 +65,7 @@ cat("Working directory:", getwd(), "\n\n")
 commute_df <- collect_commute_metadata()
 
 ############################################
-# 4A. Placeholder multi-route table
+# 3A. Placeholder multi-route table
 ############################################
 
 routes_df <- data.frame(
@@ -81,7 +80,7 @@ routes_df <- data.frame(
 )
 
 ############################################
-# 4B. Best alternative route
+# 3B. Best alternative route
 ############################################
 
 best_alternative_route <- routes_df[
@@ -93,7 +92,7 @@ best_alternative_route <- routes_df[
 best_alternative_seconds <- best_alternative_route$estimated_duration_seconds
 
 ############################################
-# 4C. Override decision
+# 3C. Override decision
 ############################################
 
 decision <- decide_route_override(
@@ -107,7 +106,17 @@ decision <- decide_route_override(
 )
 
 ############################################
-# 4E. Final decision record
+# 3D. FINAL ROUTE SELECTION (FIX)
+############################################
+
+selected_route_id <- if (decision$override_flag) {
+  best_alternative_route$route_id
+} else {
+  commute_df$preferred_route_id
+}
+
+############################################
+# 3E. Final decision record
 ############################################
 
 decision_df <- as.data.frame(decision, stringsAsFactors = FALSE)
@@ -126,7 +135,7 @@ commute_df_decision$event_id <- paste0(
 )
 
 ############################################
-# 4F. Derived reporting view (minutes)
+# 3F. Derived reporting view (minutes)
 ############################################
 
 commute_df_minutes <- transform(
