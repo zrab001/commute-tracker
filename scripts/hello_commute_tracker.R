@@ -121,32 +121,36 @@ best_alternative_route <- routes_df[
       min(routes_df$estimated_duration_seconds[!routes_df$is_preferred]),
   ]
 
+best_alternative_seconds <- best_alternative_route$estimated_duration_seconds
+
+############################################
+# 4C. Apply route override decision logic
+############################################
+
+decision <- decide_route_override(
+  baseline_seconds =
+    commute_df$baseline_duration_seconds,
+
+  preferred_seconds =
+    commute_df$preferred_route_current_duration_seconds,
+
+  best_alternative_seconds =
+    best_alternative_seconds,
+
+  threshold_seconds = 120
+)
+
+commute_df_decision <- cbind(
+  commute_df,
+  decision
+)
+
+print(commute_df_decision)
+cat("\n")
+
 print(best_alternative_route)
 cat("\n")
 
-#Calculating metrics
-threshold_seconds <- 120  # 2 minutes
-
-commute_df_metrics <- within(commute_df, {
-
-  # How much worse is the preferred route vs baseline
-  preferred_delay_seconds <-
-    preferred_route_current_duration_seconds -
-    baseline_duration_seconds
-
-  # How much better the best alternative is vs preferred
-  delta_seconds <-
-    preferred_route_current_duration_seconds -
-    estimated_duration_seconds
-
-  delta_pct <-
-    delta_seconds / preferred_route_current_duration_seconds
-
-  # Override logic
-  override_flag <-
-    preferred_delay_seconds >= threshold_seconds &
-    estimated_duration_seconds < preferred_route_current_duration_seconds
-})
 
 
 # Print all views
