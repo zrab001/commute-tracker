@@ -1,38 +1,80 @@
-# hello_commute_tracker.R
-# Purpose: minimal non-interactive R script for GitHub Actions learning
+############################################
+# Commute Tracker – Hello World Pipeline
+# Purpose:
+# - Collect canonical commute metadata (seconds)
+# - Create a derived, human-readable view (minutes)
+# - Prepare for future Google Sheets integration
+############################################
 
-write_to_google_sheets <- function(df) {
-  message("write_to_google_sheets(): not implemented yet")
-}
+
+############################################
+# 1. Function: collect_commute_metadata()
+#    - Canonical data
+#    - Seconds are the source of truth
+############################################
 
 collect_commute_metadata <- function() {
 
-  data.frame(
-    run_timestamp_local = as.POSIXct(Sys.time(), tz = "America/New_York"),
-    run_timezone = "America/New_York",
+  run_timestamp_local <- Sys.time()
+  run_timezone <- "America/New_York"
 
+  commute_df <- data.frame(
+    run_timestamp_local = run_timestamp_local,
+    run_timezone = run_timezone,
     direction = "to_work",
-
     route_id = "R1",
     preferred_route_id = "R1",
 
-    estimated_duration_seconds = 1500,
-    baseline_duration_seconds  = 1200,
-    preferred_route_current_duration_seconds = 1800,
-    
+    # Canonical duration units: SECONDS
+    estimated_duration_seconds = 1500,                 # 25 min
+    baseline_duration_seconds = 1200,                  # 20 min
+    preferred_route_current_duration_seconds = 1800,   # 30 min
+
     override_flag = TRUE,
 
     stringsAsFactors = FALSE
   )
 
+  return(commute_df)
 }
 
 
+############################################
+# 2. Function: write_to_google_sheets()
+#    - Placeholder only
+############################################
+
+write_to_google_sheets <- function(df) {
+  message("write_to_google_sheets(): not implemented yet")
+}
+
+
+############################################
+# 3. Main execution block
+#    - This is where things RUN
+############################################
+
 cat("Hello from commute-tracker\n")
-cat("Timestamp:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
-cat("Working directory:", getwd(), "\n")
+cat("Timestamp:", format(Sys.time()), "\n")
+cat("Working directory:", getwd(), "\n\n")
 
-result_df <- collect_commute_metadata()
-print(result_df)
+# Collect canonical data (seconds)
+commute_df <- collect_commute_metadata()
 
-write_to_google_sheets(result_df)
+# Derived, human-readable view (minutes)
+commute_df_minutes <- transform(
+  commute_df,
+  estimated_duration_minutes = estimated_duration_seconds / 60,
+  baseline_duration_minutes = baseline_duration_seconds / 60,
+  preferred_route_current_duration_minutes =
+    preferred_route_current_duration_seconds / 60
+)
+
+# Print both views
+print(commute_df)
+cat("\n")
+print(commute_df_minutes)
+cat("\n")
+
+# Placeholder side-effect
+write_to_google_sheets(commute_df)
