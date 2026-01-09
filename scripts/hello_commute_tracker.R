@@ -91,6 +91,27 @@ commute_df_minutes <- transform(
     preferred_route_current_duration_seconds / 60
 )
 
+############################################
+# 4A. Placeholder route table (multi-route)
+#     - Hardcoded for now
+#     - Will later come from routing APIs
+############################################
+
+routes_df <- data.frame(
+  route_id = c("R1", "R2", "R3"),
+  estimated_duration_seconds = c(
+    commute_df$preferred_route_current_duration_seconds, # preferred
+    1500,  # alternative 1
+    1650   # alternative 2
+  ),
+  is_preferred = c(TRUE, FALSE, FALSE),
+  stringsAsFactors = FALSE
+)
+
+print(routes_df)
+cat("\n")
+
+
 #Calculating metrics
 threshold_seconds <- 120  # 2 minutes
 
