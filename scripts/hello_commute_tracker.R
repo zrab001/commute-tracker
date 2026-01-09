@@ -7,9 +7,8 @@ suppressPackageStartupMessages({
   library(googleAuthR)
 })
 
-gs4_auth(
-  json = Sys.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
-)
+gs4_auth()
+
 ############################################
 # 1. Function: collect_commute_metadata()
 ############################################
