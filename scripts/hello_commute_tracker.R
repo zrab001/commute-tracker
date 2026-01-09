@@ -160,7 +160,7 @@ print(commute_df_minutes)
 cat("\n")
 
 ############################################
-# Append one row to Google Sheets
+# Format data frame for append
 ############################################
 
 commute_df_decision <- commute_df_decision[, c(
@@ -179,7 +179,41 @@ commute_df_decision <- commute_df_decision[, c(
   "selected_route_id"
 )]
 
-sheet_append(
-  ss = "1H2v-4LtmCDUu534Qo81d8IxZ4efsGJoNZ2b7RaBK2Ro",
-  data = commute_df_decision
+############################################
+# Idempotent append to Google Sheets
+############################################
+
+SHEET_ID <- "1H2v-4LtmCDUu534Qo81d8IxZ4efsGJoNZ2b7RaBK2Ro"
+
+# Read existing event_ids (Column A only)
+existing_events <- read_sheet(
+  ss = SHEET_ID,
+  range = "A:A",
+  col_names = "event_id"
 )
+
+# Check whether this event already exists
+event_already_exists <-
+  commute_df_decision$event_id %in% existing_events$event_id
+
+# Append only if new
+if (!event_already_exists) {
+
+  sheet_append(
+    ss = SHEET_ID,
+    data = commute_df_decision
+  )
+
+  message(
+    "New event appended: ",
+    commute_df_decision$event_id
+  )
+
+} else {
+
+  message(
+    "Event already exists, skipping append: ",
+    commute_df_decision$event_id
+  )
+
+}
