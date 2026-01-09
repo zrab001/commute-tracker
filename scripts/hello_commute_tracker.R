@@ -1,16 +1,9 @@
 ############################################
 # Commute Tracker – Hello World Pipeline
-# Purpose:
-# - Collect canonical commute metadata (seconds)
-# - Create a derived, human-readable view (minutes)
-# - Prepare for future Google Sheets integration
 ############################################
-
 
 ############################################
 # 1. Function: collect_commute_metadata()
-#    - Canonical data
-#    - Seconds are the source of truth
 ############################################
 
 collect_commute_metadata <- function() {
@@ -18,38 +11,31 @@ collect_commute_metadata <- function() {
   run_timestamp_local <- Sys.time()
   run_timezone <- "America/New_York"
 
-  commute_df <- data.frame(
+  data.frame(
     run_timestamp_local = run_timestamp_local,
     run_timezone = run_timezone,
     direction = "to_work",
     route_id = "R1",
     preferred_route_id = "R1",
 
-    # Canonical duration units: SECONDS
-    estimated_duration_seconds = 1500,                 # 25 min
-    baseline_duration_seconds = 1200,                  # 20 min
-    preferred_route_current_duration_seconds = 1800,   # 30 min
+    estimated_duration_seconds = 1500,
+    baseline_duration_seconds = 1200,
+    preferred_route_current_duration_seconds = 1800,
 
     stringsAsFactors = FALSE
   )
-
-  return(commute_df)
 }
-
 
 ############################################
 # 2. Function: write_to_google_sheets()
-#    - Placeholder only
 ############################################
 
 write_to_google_sheets <- function(df) {
   message("write_to_google_sheets(): not implemented yet")
 }
 
-
 ############################################
 # 3. Function: decide_route_override()
-#    - Determines whether to deviate from preferred route
 ############################################
 
 decide_route_override <- function(
@@ -71,7 +57,6 @@ decide_route_override <- function(
   )
 }
 
-
 ############################################
 # 4. Main execution block
 ############################################
@@ -80,38 +65,25 @@ cat("Hello from commute-tracker\n")
 cat("Timestamp:", format(Sys.time()), "\n")
 cat("Working directory:", getwd(), "\n\n")
 
-# Collect canonical data (seconds)
 commute_df <- collect_commute_metadata()
 
-# Derived, human-readable view (minutes)
-commute_df_minutes <- transform(
-  commute_df,
-  estimated_duration_minutes = estimated_duration_seconds / 60,
-  baseline_duration_minutes = baseline_duration_seconds / 60,
-  preferred_route_current_duration_minutes =
-    preferred_route_current_duration_seconds / 60
-)
-
 ############################################
-# 4A. Placeholder route table (multi-route)
+# 4A. Placeholder multi-route table
 ############################################
 
 routes_df <- data.frame(
   route_id = c("R1", "R2", "R3"),
   estimated_duration_seconds = c(
-    commute_df$preferred_route_current_duration_seconds, # preferred
-    1500,  # alternative 1
-    1650   # alternative 2
+    commute_df$preferred_route_current_duration_seconds,
+    1500,
+    1650
   ),
   is_preferred = c(TRUE, FALSE, FALSE),
   stringsAsFactors = FALSE
 )
 
-print(routes_df)
-cat("\n")
-
 ############################################
-# 4B. Select best alternative route
+# 4B. Best alternative route
 ############################################
 
 best_alternative_route <- routes_df[
@@ -122,43 +94,63 @@ best_alternative_route <- routes_df[
 
 best_alternative_seconds <- best_alternative_route$estimated_duration_seconds
 
-print(best_alternative_route)
-cat("\n")
-
 ############################################
-# 4C. Apply route override decision logic
+# 4C. Override decision
 ############################################
 
 decision <- decide_route_override(
   baseline_seconds =
     commute_df$baseline_duration_seconds,
-
   preferred_seconds =
     commute_df$preferred_route_current_duration_seconds,
-
   best_alternative_seconds =
     best_alternative_seconds,
-
   threshold_seconds = 120
 )
 
-commute_df_decision <- cbind(
+############################################
+# 4D. FINAL ROUTE SELECTION  ⭐ NEW ⭐
+############################################
+
+selected_route_id <- if (decision$override_flag) {
+  best_alternative_route$route_id
+} else {
+  commute_df$preferred_route_id
+}
+
+############################################
+# 4E. Final decision record
+############################################
+
+commute_df_final <- cbind(
   commute_df,
-  decision
+  decision,
+  selected_route_id = selected_route_id
 )
 
 ############################################
-# 5. Output views
+# 4F. Derived reporting view (minutes)
 ############################################
 
-print(commute_df)
-cat("\n")
+commute_df_minutes <- transform(
+  commute_df_final,
+  estimated_duration_minutes = estimated_duration_seconds / 60,
+  baseline_duration_minutes = baseline_duration_seconds / 60,
+  preferred_route_current_duration_minutes =
+    preferred_route_current_duration_seconds / 60
+)
 
+############################################
+# Output
+############################################
+
+print(routes_df)
+cat("\n")
+print(best_alternative_route)
+cat("\n")
+print(commute_df_final)
+cat("\n")
 print(commute_df_minutes)
 cat("\n")
 
-print(commute_df_decision)
-cat("\n")
-
-# Placeholder side-effect
-write_to_google_sheets(commute_df_decision)
+write_to_google_sheets(commute_df_final)
