@@ -1,6 +1,10 @@
 ############################################
 # Commute Tracker – Hello World Pipeline
 ############################################
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(googlesheets4)
+})
 
 ############################################
 # 1. Function: collect_commute_metadata()
