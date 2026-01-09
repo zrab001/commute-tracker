@@ -4,8 +4,12 @@
 suppressPackageStartupMessages({
   library(dplyr)
   library(googlesheets4)
+  library(googleAuthR)
 })
 
+gs4_auth(
+  json = Sys.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+)
 ############################################
 # 1. Function: collect_commute_metadata()
 ############################################
