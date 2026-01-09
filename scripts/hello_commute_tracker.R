@@ -79,6 +79,33 @@ decide_route_override <- function(
 }
 
 ############################################
+# 3. Function: get_route_durations() (mocked)
+############################################
+
+get_route_durations <- function(
+  origin_address,
+  destination_address,
+  route_definitions
+) {
+
+  # NOTE:
+  # This is a MOCK implementation.
+  # It will later be replaced by real routing APIs.
+
+  data.frame(
+    route_id = route_definitions$route_id,
+    estimated_duration_seconds = c(
+      1800,  # R1: preferred / default
+      1500,  # R2: alternative
+      1650   # R3: alternative
+    ),
+    is_preferred = route_definitions$route_id == "R1",
+    stringsAsFactors = FALSE
+  )
+}
+
+
+############################################
 # 3. Main execution block
 ############################################
 
@@ -93,18 +120,13 @@ cat("Working directory:", getwd(), "\n\n")
 commute_df <- collect_commute_metadata()
 
 ############################################
-# 3B. Placeholder multi-route table (mocked)
+# 3B. Get route durations (mocked)
 ############################################
 
-routes_df <- data.frame(
-  route_id = c("R1", "R2", "R3"),
-  estimated_duration_seconds = c(
-    commute_df$preferred_route_current_duration_seconds,
-    1500,
-    1650
-  ),
-  is_preferred = c(TRUE, FALSE, FALSE),
-  stringsAsFactors = FALSE
+routes_df <- get_route_durations(
+  origin_address = HOME_ADDRESS,
+  destination_address = WORK_ADDRESS,
+  route_definitions = route_definitions
 )
 
 ############################################
@@ -192,10 +214,10 @@ print(commute_df_minutes)
 cat("\n")
 
 ############################################
-# Prepare schema-aligned frame for append
+# Format data frame for append (schema-aligned)
 ############################################
 
-commute_df_decision <- commute_df_decision[, c(
+commute_df_append <- commute_df_decision[, c(
   "event_id",
   "run_timestamp_local",
   "run_timezone",
@@ -231,8 +253,8 @@ event_already_exists <-
 if (!event_already_exists) {
 
   sheet_append(
-    ss = SHEET_ID,
-    data = commute_df_decision
+  ss = SHEET_ID,
+  data = commute_df_append
   )
 
   message("New event appended: ", commute_df_decision$event_id)
