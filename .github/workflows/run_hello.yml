@@ -22,6 +22,12 @@ jobs:
             googlesheets4
             googleAuthR
 
+      - name: Write Google service account key
+        run: |
+          echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > sa-key.json
+
       - name: Run hello_commute_tracker.R
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: sa-key.json
         run: |
           Rscript scripts/hello_commute_tracker.R
