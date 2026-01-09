@@ -46,9 +46,10 @@ write_to_google_sheets <- function(df) {
   message("write_to_google_sheets(): not implemented yet")
 }
 
+
 ############################################
 # 3. Function: decide_route_override()
-#    - This logic determines whether to deviate from the preferred route
+#    - Determines whether to deviate from preferred route
 ############################################
 
 decide_route_override <- function(
@@ -70,9 +71,9 @@ decide_route_override <- function(
   )
 }
 
+
 ############################################
 # 4. Main execution block
-#    - This is where things RUN
 ############################################
 
 cat("Hello from commute-tracker\n")
@@ -93,8 +94,6 @@ commute_df_minutes <- transform(
 
 ############################################
 # 4A. Placeholder route table (multi-route)
-#     - Hardcoded for now
-#     - Will later come from routing APIs
 ############################################
 
 routes_df <- data.frame(
@@ -119,9 +118,12 @@ best_alternative_route <- routes_df[
   !routes_df$is_preferred &
     routes_df$estimated_duration_seconds ==
       min(routes_df$estimated_duration_seconds[!routes_df$is_preferred]),
-  ]
+]
 
 best_alternative_seconds <- best_alternative_route$estimated_duration_seconds
+
+print(best_alternative_route)
+cat("\n")
 
 ############################################
 # 4C. Apply route override decision logic
@@ -145,21 +147,18 @@ commute_df_decision <- cbind(
   decision
 )
 
+############################################
+# 5. Output views
+############################################
+
+print(commute_df)
+cat("\n")
+
+print(commute_df_minutes)
+cat("\n")
+
 print(commute_df_decision)
 cat("\n")
 
-print(best_alternative_route)
-cat("\n")
-
-
-
-# Print all views
-print(commute_df)
-cat("\n")
-print(commute_df_minutes)
-cat("\n")
-print(commute_df_metrics)
-cat("\n")
-
 # Placeholder side-effect
-write_to_google_sheets(commute_df)
+write_to_google_sheets(commute_df_decision)
