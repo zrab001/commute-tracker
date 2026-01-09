@@ -70,10 +70,20 @@ commute_df_minutes <- transform(
     preferred_route_current_duration_seconds / 60
 )
 
-# Print both views
+#Calculating metrics
+commute_df_metrics <- transform(
+  commute_df,
+  delta_seconds = estimated_duration_seconds - baseline_duration_seconds,
+  delta_pct = (estimated_duration_seconds - baseline_duration_seconds) /
+              baseline_duration_seconds
+)
+
+# Print all views
 print(commute_df)
 cat("\n")
 print(commute_df_minutes)
+cat("\n")
+print(commute_df_metrics)
 cat("\n")
 
 # Placeholder side-effect
