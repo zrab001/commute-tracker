@@ -16,10 +16,10 @@ collect_commute_metadata <- function() {
     route_id = "R1",
     preferred_route_id = "R1",
 
-    estimated_duration_minutes = 25,
-    preferred_route_current_duration = 30,
-    baseline_duration_minutes = 20,
-
+    estimated_duration_seconds = 1500,
+    baseline_duration_seconds  = 1200,
+    preferred_route_current_duration_seconds = 1800,
+    
     override_flag = TRUE,
 
     stringsAsFactors = FALSE
