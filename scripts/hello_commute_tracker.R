@@ -166,9 +166,6 @@ cat("\n")
 print(commute_df_minutes)
 cat("\n")
 
-write_to_google_sheets(commute_df_final)
-
-
 # Append one row to Google Sheets
 sheet_append(
   ss = "1H2v-4LtmCDUu534Qo81d8IxZ4efsGJoNZ2b7RaBK2Ro",
