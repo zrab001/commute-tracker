@@ -110,10 +110,14 @@ decision <- decide_route_override(
 # 4E. Final decision record
 ############################################
 
+decision_df <- as.data.frame(decision, stringsAsFactors = FALSE)
+
 commute_df_decision <- cbind(
   commute_df,
-  decision
+  decision_df
 )
+
+commute_df_decision$selected_route_id <- selected_route_id
 
 commute_df_decision$event_id <- paste0(
   format(commute_df_decision$run_timestamp_local, "%Y%m%d%H%M%S"),
@@ -149,6 +153,22 @@ cat("\n")
 ############################################
 # Append one row to Google Sheets
 ############################################
+
+commute_df_decision <- commute_df_decision[, c(
+  "event_id",
+  "run_timestamp_local",
+  "run_timezone",
+  "direction",
+  "route_id",
+  "preferred_route_id",
+  "estimated_duration_seconds",
+  "baseline_duration_seconds",
+  "preferred_route_current_duration_seconds",
+  "override_flag",
+  "preferred_delay_seconds",
+  "delta_seconds",
+  "selected_route_id"
+)]
 
 sheet_append(
   ss = "1H2v-4LtmCDUu534Qo81d8IxZ4efsGJoNZ2b7RaBK2Ro",
