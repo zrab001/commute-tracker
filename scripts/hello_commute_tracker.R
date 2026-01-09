@@ -71,11 +71,28 @@ commute_df_minutes <- transform(
 )
 
 #Calculating metrics
+threshold_seconds <- 120  # 2 minutes
+
 commute_df_metrics <- transform(
   commute_df,
-  delta_seconds = estimated_duration_seconds - baseline_duration_seconds,
-  delta_pct = (estimated_duration_seconds - baseline_duration_seconds) /
-              baseline_duration_seconds
+
+  # How much worse is the preferred route vs baseline
+  preferred_delay_seconds =
+    preferred_route_current_duration_seconds -
+    baseline_duration_seconds,
+
+  # How much better the best alternative is vs preferred
+  delta_seconds =
+    preferred_route_current_duration_seconds -
+    estimated_duration_seconds,
+
+  delta_pct =
+    delta_seconds / preferred_route_current_duration_seconds,
+
+  # Override logic
+  override_flag =
+    preferred_delay_seconds >= threshold_seconds &
+    estimated_duration_seconds < preferred_route_current_duration_seconds
 )
 
 # Print all views
