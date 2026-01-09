@@ -6,12 +6,25 @@ write_to_google_sheets <- function(df) {
 }
 
 collect_commute_metadata <- function() {
+
   data.frame(
-    run_timestamp = as.POSIXct(Sys.time(), tz = "America/New_York"),
-    runner = Sys.info()[["nodename"]],
-    working_directory = getwd(),
+    run_timestamp_local = as.POSIXct(Sys.time(), tz = "America/New_York"),
+    run_timezone = "America/New_York",
+
+    direction = "to_work",
+
+    route_id = "R1",
+    preferred_route_id = "R1",
+
+    estimated_duration_minutes = 25,
+    preferred_route_current_duration = 30,
+    baseline_duration_minutes = 20,
+
+    override_flag = TRUE,
+
     stringsAsFactors = FALSE
   )
+
 }
 
 
