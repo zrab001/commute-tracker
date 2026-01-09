@@ -1,11 +1,34 @@
 ############################################
 # Commute Tracker – Hello World Pipeline
+# v1.1: Canonical addresses + route definitions
 ############################################
+
 suppressPackageStartupMessages({
   library(googlesheets4)
 })
 
 gs4_auth()
+
+############################################
+# Canonical commute addresses
+############################################
+
+HOME_ADDRESS <- "7501 Cavan Ct, Laurel, MD 20707"
+WORK_ADDRESS <- "8320 Guilford Rd, Columbia, MD 21046"
+
+############################################
+# Canonical route definitions (intent only)
+############################################
+
+route_definitions <- data.frame(
+  route_id = c("R1", "R2", "R3"),
+  route_label = c(
+    "Default / fastest route",
+    "Avoid highways",
+    "Local roads"
+  ),
+  stringsAsFactors = FALSE
+)
 
 ############################################
 # 1. Function: collect_commute_metadata()
@@ -23,6 +46,7 @@ collect_commute_metadata <- function() {
     route_id = "R1",
     preferred_route_id = "R1",
 
+    # Placeholder durations (seconds)
     estimated_duration_seconds = 1500,
     baseline_duration_seconds = 1200,
     preferred_route_current_duration_seconds = 1800,
@@ -62,10 +86,14 @@ cat("Hello from commute-tracker\n")
 cat("Timestamp:", format(Sys.time()), "\n")
 cat("Working directory:", getwd(), "\n\n")
 
+############################################
+# 3A. Collect base commute metadata
+############################################
+
 commute_df <- collect_commute_metadata()
 
 ############################################
-# 3A. Placeholder multi-route table
+# 3B. Placeholder multi-route table (mocked)
 ############################################
 
 routes_df <- data.frame(
@@ -80,7 +108,7 @@ routes_df <- data.frame(
 )
 
 ############################################
-# 3B. Best alternative route
+# 3C. Select best alternative route
 ############################################
 
 best_alternative_route <- routes_df[
@@ -92,7 +120,7 @@ best_alternative_route <- routes_df[
 best_alternative_seconds <- best_alternative_route$estimated_duration_seconds
 
 ############################################
-# 3C. Override decision
+# 3D. Override decision
 ############################################
 
 decision <- decide_route_override(
@@ -106,7 +134,7 @@ decision <- decide_route_override(
 )
 
 ############################################
-# 3D. FINAL ROUTE SELECTION (FIX)
+# 3E. Final route selection
 ############################################
 
 selected_route_id <- if (decision$override_flag) {
@@ -116,7 +144,7 @@ selected_route_id <- if (decision$override_flag) {
 }
 
 ############################################
-# 3E. Final decision record
+# 3F. Final decision record (canonical event)
 ############################################
 
 decision_df <- as.data.frame(decision, stringsAsFactors = FALSE)
@@ -127,6 +155,8 @@ commute_df_decision <- cbind(
 )
 
 commute_df_decision$selected_route_id <- selected_route_id
+commute_df_decision$origin_address <- HOME_ADDRESS
+commute_df_decision$destination_address <- WORK_ADDRESS
 
 commute_df_decision$event_id <- paste0(
   format(commute_df_decision$run_timestamp_local, "%Y%m%d%H%M%S"),
@@ -135,7 +165,7 @@ commute_df_decision$event_id <- paste0(
 )
 
 ############################################
-# 3F. Derived reporting view (minutes)
+# 3G. Derived reporting view (minutes)
 ############################################
 
 commute_df_minutes <- transform(
@@ -147,9 +177,11 @@ commute_df_minutes <- transform(
 )
 
 ############################################
-# Output
+# Diagnostics (console only)
 ############################################
 
+print(route_definitions)
+cat("\n")
 print(routes_df)
 cat("\n")
 print(best_alternative_route)
@@ -160,7 +192,7 @@ print(commute_df_minutes)
 cat("\n")
 
 ############################################
-# Format data frame for append
+# Prepare schema-aligned frame for append
 ############################################
 
 commute_df_decision <- commute_df_decision[, c(
@@ -168,6 +200,8 @@ commute_df_decision <- commute_df_decision[, c(
   "run_timestamp_local",
   "run_timezone",
   "direction",
+  "origin_address",
+  "destination_address",
   "route_id",
   "preferred_route_id",
   "estimated_duration_seconds",
@@ -185,18 +219,15 @@ commute_df_decision <- commute_df_decision[, c(
 
 SHEET_ID <- "1H2v-4LtmCDUu534Qo81d8IxZ4efsGJoNZ2b7RaBK2Ro"
 
-# Read existing event_ids (Column A only)
 existing_events <- read_sheet(
   ss = SHEET_ID,
   range = "A:A",
   col_names = "event_id"
 )
 
-# Check whether this event already exists
 event_already_exists <-
   commute_df_decision$event_id %in% existing_events$event_id
 
-# Append only if new
 if (!event_already_exists) {
 
   sheet_append(
@@ -204,16 +235,10 @@ if (!event_already_exists) {
     data = commute_df_decision
   )
 
-  message(
-    "New event appended: ",
-    commute_df_decision$event_id
-  )
+  message("New event appended: ", commute_df_decision$event_id)
 
 } else {
 
-  message(
-    "Event already exists, skipping append: ",
-    commute_df_decision$event_id
-  )
+  message("Event already exists, skipping append: ", commute_df_decision$event_id)
 
 }
