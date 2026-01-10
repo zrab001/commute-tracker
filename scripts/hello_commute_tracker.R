@@ -40,26 +40,66 @@ route_definitions <- data.frame(
 # 1. Function: collect_commute_metadata()
 ############################################
 
-collect_commute_metadata <- function() {
+# ---- MOCKED PLACEHOLDER DURATIONS (DISABLED) ----
+# The following block is intentionally disabled.
+# It remains here as a fallback for offline testing.
+#
+# collect_commute_metadata <- function() {
+#
+#   run_timestamp_local <- Sys.time()
+#   run_timezone <- "America/New_York"
+#
+#   data.frame(
+#     run_timestamp_local = run_timestamp_local,
+#     run_timezone = run_timezone,
+#     direction = "to_work",
+#     route_id = "R1",
+#     preferred_route_id = "R1",
+#
+#     # Placeholder durations (seconds)
+#     estimated_duration_seconds = 1500,
+#     baseline_duration_seconds = 1200,
+#     preferred_route_current_duration_seconds = 1800,
+#
+#     stringsAsFactors = FALSE
+#   )
+# }
 
-  run_timestamp_local <- Sys.time()
-  run_timezone <- "America/New_York"
 
-  data.frame(
-    run_timestamp_local = run_timestamp_local,
-    run_timezone = run_timezone,
-    direction = "to_work",
-    route_id = "R1",
-    preferred_route_id = "R1",
+get_route_duration_seconds <- function(origin, destination) {
 
-    # Placeholder durations (seconds)
-    estimated_duration_seconds = 1500,
-    baseline_duration_seconds = 1200,
-    preferred_route_current_duration_seconds = 1800,
+  api_key <- Sys.getenv("GOOGLE_MAPS_API_KEY")
+  if (api_key == "") {
+    stop("GOOGLE_MAPS_API_KEY is not set")
+  }
 
-    stringsAsFactors = FALSE
+  response <- httr::GET(
+    url = "https://maps.googleapis.com/maps/api/directions/json",
+    query = list(
+      origin = origin,
+      destination = destination,
+      mode = "driving",
+      departure_time = "now",
+      key = api_key
+    )
   )
+
+  httr::stop_for_status(response)
+
+  parsed <- jsonlite::fromJSON(
+    httr::content(response, as = "text", encoding = "UTF-8")
+  )
+
+  if (parsed$status != "OK") {
+    stop("Directions API error: ", parsed$status)
+  }
+
+  parsed$routes[[1]]$legs[[1]]$duration$value
 }
+
+
+
+
 
 ############################################
 # 2. Function: decide_route_override()
@@ -129,11 +169,24 @@ commute_df <- collect_commute_metadata()
 # 3B. Get route durations (mocked)
 ############################################
 
-routes_df <- get_route_durations(
-  origin_address = HOME_ADDRESS,
-  destination_address = WORK_ADDRESS,
-  route_definitions = route_definitions
+#routes_df <- get_route_durations(
+#  origin_address = HOME_ADDRESS,
+#  destination_address = WORK_ADDRESS,
+#  route_definitions = route_definitions
+#)
+
+routes_df <- data.frame(
+  route_id = c("R1"),
+  estimated_duration_seconds = c(
+    get_route_duration_seconds(
+      origin = if (commute_df$direction == "to_work") HOME_ADDRESS else WORK_ADDRESS,
+      destination = if (commute_df$direction == "to_work") WORK_ADDRESS else HOME_ADDRESS
+    )
+  ),
+  is_preferred = TRUE,
+  stringsAsFactors = FALSE
 )
+
 
 ############################################
 # 3C. Select best alternative route
