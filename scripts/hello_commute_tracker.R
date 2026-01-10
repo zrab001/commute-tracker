@@ -193,11 +193,12 @@ commute_df_decision$event_id <- paste0(
 )
 
 commute_df_decision$day_type <- determine_us_date_classification(
-  date_input_scalar = commute_df_decision$run_timestamp_local,
+  date_input_scalar = as.Date(commute_df_decision$run_timestamp_local),
   include_black_friday = TRUE,
   include_christmas_eve = FALSE,
   include_day_after_christmas = FALSE
 )
+
 
 ################################################
 #Stop code if determine_us_date_classification() remains undefined or return values are invalid
