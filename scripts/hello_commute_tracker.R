@@ -196,6 +196,8 @@ commute_df_decision$day_type <- determine_us_date_classification(
   commute_df_decision$run_timestamp_local
 )
 
+#Stop code if determine_us_date_classification() remains undefined
+stopifnot(!is.na(commute_df_decision$day_type))
 ############################################
 # 3G. Derived reporting view (minutes)
 ############################################
