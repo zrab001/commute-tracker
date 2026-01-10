@@ -18,10 +18,13 @@ jobs:
         uses: r-lib/actions/setup-r-dependencies@v2
         with:
           packages: |
-            dplyr
             googlesheets4
-            googleAuthR
-
+            lubridate
+            dplyr
+            purrr
+            magrittr
+            tibble
+      
       - name: Write Google service account key
         run: |
           echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > sa-key.json
