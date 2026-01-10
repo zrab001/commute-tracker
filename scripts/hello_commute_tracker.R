@@ -193,11 +193,22 @@ commute_df_decision$event_id <- paste0(
 )
 
 commute_df_decision$day_type <- determine_us_date_classification(
-  commute_df_decision$run_timestamp_local
+  date_input_scalar = commute_df_decision$run_timestamp_local,
+  include_black_friday = TRUE,
+  include_christmas_eve = FALSE,
+  include_day_after_christmas = FALSE
 )
 
-#Stop code if determine_us_date_classification() remains undefined
+################################################
+#Stop code if determine_us_date_classification() remains undefined or return values are invalid
+####################################################
 stopifnot(!is.na(commute_df_decision$day_type))
+
+stopifnot(
+  commute_df_decision$day_type %in%
+    c("HARD", "SOFT", "WORKDAY", "WEEKEND", "HOLIWEEKEND")
+)
+
 ############################################
 # 3G. Derived reporting view (minutes)
 ############################################
