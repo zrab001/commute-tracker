@@ -186,6 +186,10 @@ commute_df_decision$event_id <- paste0(
   commute_df_decision$direction
 )
 
+commute_df_decision$day_type <- determine_us_date_classification(
+  commute_df_decision$run_timestamp_local
+)
+
 ############################################
 # 3G. Derived reporting view (minutes)
 ############################################
@@ -232,7 +236,8 @@ commute_df_append <- commute_df_decision[, c(
   "override_flag",
   "preferred_delay_seconds",
   "delta_seconds",
-  "selected_route_id"
+  "selected_route_id",
+  "day_type"
 )]
 
 ############################################
