@@ -7,6 +7,12 @@ suppressPackageStartupMessages({
   library(googlesheets4)
 })
 
+suppressPackageStartupMessages({
+  library(googlesheets4)
+})
+
+source("R/holiday_classification.R")
+
 gs4_auth()
 
 ############################################
