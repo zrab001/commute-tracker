@@ -30,7 +30,7 @@ collect_commute_metadata <- function() {
 
   BUSINESS_TZ <- "America/New_York"
   
-  run_timestamp_local <- with_tz(Sys.time(), tzone = BUSINESS_TZ)
+  run_timestamp_local <- force_tz(Sys.time(), tzone = BUSINESS_TZ)
   run_timezone <- BUSINESS_TZ
 
   data.frame(
