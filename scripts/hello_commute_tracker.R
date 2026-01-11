@@ -15,23 +15,36 @@ suppressPackageStartupMessages({
 })
 
 ############################################
-# Load configuration (with validation)
+# Load and validate configuration
 ############################################
 
 CONFIG <- yaml::read_yaml("config/commute_config.yml")
 
-if (is.null(CONFIG$timezone$business_timezone)) {
-  stop("Config error: 'business_timezone' is missing from commute_config.yml")
-}
-
+# ---- Timezone ----
 BUSINESS_TZ <- CONFIG$timezone$business_timezone
 
-if (!BUSINESS_TZ %in% OlsonNames()) {
-  stop(
-    "Config error: 'business_timezone' is not a valid Olson timezone: ",
-    BUSINESS_TZ
-  )
+if (is.null(BUSINESS_TZ)) {
+  stop("Config error: timezone.business_timezone is missing")
 }
+
+if (!BUSINESS_TZ %in% OlsonNames()) {
+  stop("Invalid business timezone: ", BUSINESS_TZ)
+}
+
+# ---- Addresses ----
+HOME_ADDRESS <- CONFIG$address$home_address
+WORK_ADDRESS <- CONFIG$address$work_address
+
+if (is.null(HOME_ADDRESS) || is.null(WORK_ADDRESS)) {
+  stop("Config error: address.home_address or address.work_address missing")
+}
+
+# ---- Commute windows ----
+TO_WORK_WINDOW <- CONFIG$commute_windows$to_work
+TO_HOME_WINDOW <- CONFIG$commute_windows$to_home
+
+# ---- Holiday policy ----
+HOLIDAY_POLICY <- CONFIG$holiday_policy
 
 ############################################
 # Source holiday classification logic
@@ -44,13 +57,6 @@ source("R/holiday_classification.R")
 ############################################
 
 gs4_auth()
-
-############################################
-# Canonical commute addresses
-############################################
-
-HOME_ADDRESS <- CONFIG$address$home_address
-WORK_ADDRESS <- CONFIG$address$work_address
 
 ############################################
 # Helper: parse HH:MM strings into seconds
@@ -68,14 +74,15 @@ parse_hhmm_to_seconds <- function(hhmm) {
 determine_commute_direction <- function(run_timestamp_local_chr) {
 
   ts <- as.POSIXct(run_timestamp_local_chr, tz = BUSINESS_TZ)
+
   seconds_since_midnight <-
     hour(ts) * 3600 + minute(ts) * 60
 
-  to_work_start <- parse_hhmm_to_seconds(CONFIG$to_work_window$start)
-  to_work_end   <- parse_hhmm_to_seconds(CONFIG$to_work_window$end)
+  to_work_start <- parse_hhmm_to_seconds(TO_WORK_WINDOW$start)
+  to_work_end   <- parse_hhmm_to_seconds(TO_WORK_WINDOW$end)
 
-  to_home_start <- parse_hhmm_to_seconds(CONFIG$to_home_window$start)
-  to_home_end   <- parse_hhmm_to_seconds(CONFIG$to_home_window$end)
+  to_home_start <- parse_hhmm_to_seconds(TO_HOME_WINDOW$start)
+  to_home_end   <- parse_hhmm_to_seconds(TO_HOME_WINDOW$end)
 
   if (seconds_since_midnight >= to_work_start &&
       seconds_since_midnight <= to_work_end) {
@@ -87,7 +94,7 @@ determine_commute_direction <- function(run_timestamp_local_chr) {
     return("to_home")
   }
 
-  return(NA_character_)
+  NA_character_
 }
 
 ############################################
@@ -259,11 +266,14 @@ commute_df_decision <- commute_df %>%
       direction
     ),
     day_type = determine_us_date_classification(
-      date_input_scalar = as.Date(run_timestamp_local),
-      include_black_friday = CONFIG$include_black_friday,
-      include_christmas_eve = CONFIG$include_christmas_eve,
-      include_day_after_christmas = CONFIG$include_day_after_christmas
-    )
+        date_input_scalar = as.Date(run_timestamp_local),
+        include_black_friday =
+          HOLIDAY_POLICY$include_black_friday,
+        include_christmas_eve =
+          HOLIDAY_POLICY$include_christmas_eve,
+        include_day_after_christmas =
+          HOLIDAY_POLICY$include_day_after_christmas
+      )
   )
 
 ############################################
