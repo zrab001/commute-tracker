@@ -80,12 +80,13 @@ get_route_duration_seconds <- function(origin, destination) {
     )
   }
 
-  leg <- parsed$routes[[1]]$legs[[1]]
+  # ---- SAFE LEG EXTRACTION (THIS WAS THE MISSING PIECE) ----
+  route1 <- parsed$routes[1, ]
+  leg <- route1$legs[[1]]
 
-  # --- Robust duration extraction (THIS IS THE IMPORTANT PART) ---
   extract_duration_value <- function(x) {
     if (is.null(x)) return(NULL)
-    if (is.data.frame(x) && "value" %in% names(x)) return(x$value[[1]])
+    if (is.data.frame(x) && "value" %in% names(x)) return(x$value[1])
     if (is.list(x) && !is.null(x$value)) return(x$value)
     NULL
   }
