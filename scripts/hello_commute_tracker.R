@@ -28,8 +28,10 @@ WORK_ADDRESS <- "8320 Guilford Rd, Columbia, MD 21046"
 
 collect_commute_metadata <- function() {
 
-  run_timestamp_local <- Sys.time()
-  run_timezone <- "America/New_York"
+  BUSINESS_TZ <- "America/New_York"
+  
+  run_timestamp_local <- with_tz(Sys.time(), tzone = BUSINESS_TZ)
+  run_timezone <- BUSINESS_TZ
 
   data.frame(
     run_timestamp_local = run_timestamp_local,
