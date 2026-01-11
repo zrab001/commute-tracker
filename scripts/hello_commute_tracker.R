@@ -152,7 +152,7 @@ determine_commute_direction <- function(
   run_timestamp_local,
   to_work_start = "06:30",
   to_work_end   = "09:30",
-  from_work_start = "15:30",
+  from_work_start = "12:20",
   from_work_end   = "18:00"
 ) {
 
