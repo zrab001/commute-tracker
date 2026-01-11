@@ -147,20 +147,31 @@ get_route_duration_seconds <- function(origin, destination) {
     message("Directions API error_message: ", parsed$error_message)
   }
 
-  if (parsed$status != "OK" ||
-      length(parsed$routes) == 0 ||
-      length(parsed$routes[[1]]$legs) == 0) {
-  
+  if (parsed$status != "OK" || length(parsed$routes) == 0) {
     message(
-      "Directions API returned no usable route/leg (status = ",
+      "Directions API returned no routes (status = ",
       parsed$status,
       "). Exiting without recording data."
     )
-  
     quit(status = 0)
   }
 
-  leg <- parsed$routes[[1]]$legs[[1]]
+  # Defensive leg extraction
+  legs <- parsed$routes[[1]]$legs
+  
+  if (is.null(legs)) {
+    message("Directions API returned route without legs. Exiting.")
+    quit(status = 0)
+  }
+  
+  leg <- if (is.data.frame(legs)) {
+    legs[1, ]
+  } else if (is.list(legs) && length(legs) > 0) {
+    legs[[1]]
+  } else {
+    message("Directions API returned empty legs structure. Exiting.")
+    quit(status = 0)
+  }
 
   duration_seconds <- extract_duration_value(leg$duration_in_traffic)
   if (is.null(duration_seconds)) {
