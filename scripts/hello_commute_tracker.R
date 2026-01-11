@@ -112,11 +112,16 @@ get_route_duration_seconds <- function(origin, destination) {
     httr::content(response, as = "text", encoding = "UTF-8")
   )
 
-  if (parsed$status != "OK") {
-    stop("Directions API error: ", parsed$status)
+if (parsed$status != "OK" || length(parsed$routes) == 0) {
+  stop(
+    "Directions API returned no routes. Status = ",
+    parsed$status,
+    call. = FALSE
+  )
   }
 
   parsed$routes[[1]]$legs[[1]]$duration$value
+
 }
 
 
