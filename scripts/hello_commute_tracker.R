@@ -109,30 +109,67 @@ get_route_duration_seconds <- function(origin, destination) {
 
   as.integer(duration_seconds)
 }
+
+############################################
+# Helper: convert "HH:MM" to minutes since midnight
+############################################
+
+hhmm_to_minutes <- function(hhmm) {
+
+  if (!grepl("^\\d{1,2}:\\d{2}$", hhmm)) {
+    stop("Invalid time format (expected HH:MM): ", hhmm, call. = FALSE)
+  }
+
+  parts <- strsplit(hhmm, ":", fixed = TRUE)[[1]]
+  hours <- as.integer(parts[1])
+  minutes <- as.integer(parts[2])
+
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    stop("Invalid time value: ", hhmm, call. = FALSE)
+  }
+
+  hours * 60 + minutes
+}
+
 ############################################
 # Helper: determine commute direction
 ############################################
 
-determine_commute_direction <- function(run_timestamp_local) {
+determine_commute_direction <- function(
+  run_timestamp_local,
+  to_work_start = "06:30",
+  to_work_end   = "09:30",
+  from_work_start = "15:30",
+  from_work_end   = "18:00"
+) {
 
-  local_time <- strftime(
-  as.POSIXct(run_timestamp_local, tz = "America/New_York"),
-  format = "%H:%M"
-  )
+  ts <- as.POSIXct(run_timestamp_local, tz = "America/New_York")
 
+  minutes_since_midnight <-
+    as.integer(format(ts, "%H")) * 60 +
+    as.integer(format(ts, "%M"))
 
-  if (local_time >= "06:30" && local_time <= "09:30") {
+  # Convert developer-friendly inputs
+  to_work_start_min   <- hhmm_to_minutes(to_work_start)
+  to_work_end_min     <- hhmm_to_minutes(to_work_end)
+  from_work_start_min <- hhmm_to_minutes(from_work_start)
+  from_work_end_min   <- hhmm_to_minutes(from_work_end)
+
+  if (minutes_since_midnight >= to_work_start_min &&
+      minutes_since_midnight <= to_work_end_min) {
     return("to_work")
   }
 
-  if (local_time >= "15:30" && local_time <= "18:00") {
+  if (minutes_since_midnight >= from_work_start_min &&
+      minutes_since_midnight <= from_work_end_min) {
     return("from_work")
   }
 
   stop(
     "Run time outside commute windows (",
-    local_time,
-    "). No data recorded."
+    format(ts, "%H:%M"),
+    "). No data recorded.",
+    call. = FALSE
   )
 }
 
