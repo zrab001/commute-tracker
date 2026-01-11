@@ -9,6 +9,10 @@ suppressPackageStartupMessages({
   library(lubridate)
 })
 
+# --- Force business timezone (critical for CI runners) ---
+BUSINESS_TZ <- "America/New_York"
+Sys.setenv(TZ = BUSINESS_TZ)
+
 # Authenticate to Google Sheets via service account
 gs4_auth()
 
@@ -28,9 +32,8 @@ WORK_ADDRESS <- "8320 Guilford Rd, Columbia, MD 21046"
 
 collect_commute_metadata <- function() {
 
-  BUSINESS_TZ <- "America/New_York"
-  
-  run_timestamp_local <- force_tz(Sys.time(), tzone = BUSINESS_TZ)
+  # Sys.time() now returns BUSINESS_TZ time because TZ env var is set
+  run_timestamp_local <- Sys.time()
   run_timezone <- BUSINESS_TZ
 
   data.frame(
@@ -82,7 +85,7 @@ get_route_duration_seconds <- function(origin, destination) {
     )
   }
 
-  # ---- SAFE LEG EXTRACTION (THIS WAS THE MISSING PIECE) ----
+  # Robust leg extraction when routes is a data.frame with list-columns
   route1 <- parsed$routes[1, ]
   leg <- route1$legs[[1]]
 
@@ -94,7 +97,6 @@ get_route_duration_seconds <- function(origin, destination) {
   }
 
   duration_seconds <- extract_duration_value(leg$duration_in_traffic)
-
   if (is.null(duration_seconds)) {
     duration_seconds <- extract_duration_value(leg$duration)
   }
@@ -111,7 +113,7 @@ get_route_duration_seconds <- function(origin, destination) {
 ############################################
 
 cat("Hello from commute-tracker\n")
-cat("Timestamp:", format(Sys.time()), "\n")
+cat("Timestamp (business TZ):", format(Sys.time(), tz = BUSINESS_TZ), "\n")
 cat("Working directory:", getwd(), "\n\n")
 
 # Base metadata
@@ -133,6 +135,8 @@ duration_seconds <- get_route_duration_seconds(
 
 commute_df_final <- cbind(
   commute_df,
+  origin_address = origin_address,
+  destination_address = destination_address,
   estimated_duration_seconds = duration_seconds,
   baseline_duration_seconds = duration_seconds,
   preferred_route_current_duration_seconds = duration_seconds,
@@ -140,21 +144,19 @@ commute_df_final <- cbind(
   preferred_delay_seconds = 0,
   delta_seconds = 0,
   selected_route_id = "R1",
-  origin_address = origin_address,
-  destination_address = destination_address,
   stringsAsFactors = FALSE
 )
 
-# Deterministic event ID
+# Deterministic event_id based on BUSINESS_TZ wall-clock time
 commute_df_final$event_id <- paste0(
-  format(commute_df_final$run_timestamp_local, "%Y%m%d%H%M%S"),
+  format(commute_df_final$run_timestamp_local, "%Y%m%d%H%M%S", tz = BUSINESS_TZ),
   "_",
   commute_df_final$direction
 )
 
-# Day classification
+# Day classification uses BUSINESS_TZ date
 commute_df_final$day_type <- determine_us_date_classification(
-  date_input_scalar = as.Date(commute_df_final$run_timestamp_local),
+  date_input_scalar = as.Date(with_tz(commute_df_final$run_timestamp_local, tzone = BUSINESS_TZ)),
   include_black_friday = TRUE,
   include_christmas_eve = FALSE,
   include_day_after_christmas = FALSE
