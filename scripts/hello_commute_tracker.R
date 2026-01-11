@@ -226,6 +226,11 @@ best_alternative_seconds <- best_alternative_route$estimated_duration_seconds
 # 3D. Override decision
 ############################################
 
+if (is.na(commute_df$baseline_duration_seconds)) {
+  commute_df$baseline_duration_seconds <- routes_df$estimated_duration_seconds[1]
+  commute_df$preferred_route_current_duration_seconds <- routes_df$estimated_duration_seconds[1]
+}
+
 decision <- decide_route_override(
   baseline_seconds =
     commute_df$baseline_duration_seconds,
