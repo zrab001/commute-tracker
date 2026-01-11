@@ -9,11 +9,7 @@ suppressPackageStartupMessages({
   library(lubridate)
 })
 
-# --- Force business timezone (critical for CI runners) ---
-BUSINESS_TZ <- "America/New_York"
-Sys.setenv(TZ = BUSINESS_TZ)
-
-# Authenticate to Google Sheets via service account
+# Google Sheets auth (service account via GOOGLE_APPLICATION_CREDENTIALS)
 gs4_auth()
 
 # Holiday classification helper
@@ -26,20 +22,34 @@ source("R/holiday_classification.R")
 HOME_ADDRESS <- "7501 Cavan Ct, Laurel, MD 20707"
 WORK_ADDRESS <- "8320 Guilford Rd, Columbia, MD 21046"
 
+BUSINESS_TZ <- "America/New_York"
+
 ############################################
 # 1. Collect base commute metadata
+#    IMPORTANT: run_timestamp_local is stored as a CHARACTER string
+#    formatted in BUSINESS_TZ to avoid Sheets timezone ambiguity.
 ############################################
 
 collect_commute_metadata <- function() {
 
-  # Sys.time() now returns BUSINESS_TZ time because TZ env var is set
-  run_timestamp_local <- Sys.time()
-  run_timezone <- BUSINESS_TZ
+  run_timestamp_epoch <- as.numeric(Sys.time())
+
+  run_timestamp_local_posix <- as.POSIXct(
+    run_timestamp_epoch,
+    origin = "1970-01-01",
+    tz = BUSINESS_TZ
+  )
+
+  run_timestamp_local <- format(
+    run_timestamp_local_posix,
+    "%Y-%m-%d %H:%M:%S",
+    tz = BUSINESS_TZ
+  )
 
   data.frame(
-    run_timestamp_local = run_timestamp_local,
-    run_timezone = run_timezone,
-    direction = "to_work",     # will be automated later
+    run_timestamp_local = run_timestamp_local,  # <-- CHARACTER in NY time
+    run_timezone = BUSINESS_TZ,
+    direction = "to_work",                      # will be automated later
     route_id = "R1",
     preferred_route_id = "R1",
     stringsAsFactors = FALSE
@@ -53,9 +63,7 @@ collect_commute_metadata <- function() {
 get_route_duration_seconds <- function(origin, destination) {
 
   api_key <- Sys.getenv("GOOGLE_MAPS_API_KEY")
-  if (api_key == "") {
-    stop("GOOGLE_MAPS_API_KEY is not set", call. = FALSE)
-  }
+  if (api_key == "") stop("GOOGLE_MAPS_API_KEY is not set", call. = FALSE)
 
   response <- httr::GET(
     url = "https://maps.googleapis.com/maps/api/directions/json",
@@ -78,14 +86,9 @@ get_route_duration_seconds <- function(origin, destination) {
   )
 
   if (parsed$status != "OK" || length(parsed$routes) == 0) {
-    stop(
-      "Directions API returned no routes. Status = ",
-      parsed$status,
-      call. = FALSE
-    )
+    stop("Directions API returned no routes. Status = ", parsed$status, call. = FALSE)
   }
 
-  # Robust leg extraction when routes is a data.frame with list-columns
   route1 <- parsed$routes[1, ]
   leg <- route1$legs[[1]]
 
@@ -97,9 +100,7 @@ get_route_duration_seconds <- function(origin, destination) {
   }
 
   duration_seconds <- extract_duration_value(leg$duration_in_traffic)
-  if (is.null(duration_seconds)) {
-    duration_seconds <- extract_duration_value(leg$duration)
-  }
+  if (is.null(duration_seconds)) duration_seconds <- extract_duration_value(leg$duration)
 
   if (length(duration_seconds) != 1 || is.na(duration_seconds)) {
     stop("Directions API returned no usable duration value", call. = FALSE)
@@ -113,24 +114,21 @@ get_route_duration_seconds <- function(origin, destination) {
 ############################################
 
 cat("Hello from commute-tracker\n")
-cat("Timestamp (business TZ):", format(Sys.time(), tz = BUSINESS_TZ), "\n")
+cat("Timestamp (NY string):", collect_commute_metadata()$run_timestamp_local, "\n")
 cat("Working directory:", getwd(), "\n\n")
 
-# Base metadata
 commute_df <- collect_commute_metadata()
 
-# Resolve direction
 origin_address <- if (commute_df$direction == "to_work") HOME_ADDRESS else WORK_ADDRESS
 destination_address <- if (commute_df$direction == "to_work") WORK_ADDRESS else HOME_ADDRESS
 
-# Live traffic duration
 duration_seconds <- get_route_duration_seconds(
   origin = origin_address,
   destination = destination_address
 )
 
 ############################################
-# 4. Canonical event record
+# 4. Final event record
 ############################################
 
 commute_df_final <- cbind(
@@ -147,30 +145,20 @@ commute_df_final <- cbind(
   stringsAsFactors = FALSE
 )
 
-# Deterministic event_id based on BUSINESS_TZ wall-clock time
-commute_df_final$event_id <- paste0(
-  format(commute_df_final$run_timestamp_local, "%Y%m%d%H%M%S", tz = BUSINESS_TZ),
-  "_",
-  commute_df_final$direction
-)
+# event_id based on the SAME NY-local string
+event_stamp <- gsub("[-: ]", "", commute_df_final$run_timestamp_local)  # YYYYMMDDHHMMSS
+commute_df_final$event_id <- paste0(event_stamp, "_", commute_df_final$direction)
 
-# Day classification uses BUSINESS_TZ date
+# Day type derived from NY-local date (string -> Date)
 commute_df_final$day_type <- determine_us_date_classification(
-  date_input_scalar = as.Date(with_tz(commute_df_final$run_timestamp_local, tzone = BUSINESS_TZ)),
+  date_input_scalar = as.Date(substr(commute_df_final$run_timestamp_local, 1, 10)),
   include_black_friday = TRUE,
   include_christmas_eve = FALSE,
   include_day_after_christmas = FALSE
 )
 
 ############################################
-# 5. Diagnostics (console only)
-############################################
-
-print(commute_df_final)
-cat("\n")
-
-############################################
-# 6. Append to Google Sheets (idempotent)
+# 5. Append to Google Sheets (idempotent)
 ############################################
 
 SHEET_ID <- "1H2v-4LtmCDUu534Qo81d8IxZ4efsGJoNZ2b7RaBK2Ro"
@@ -202,11 +190,7 @@ existing_events <- read_sheet(
 
 if (!(commute_df_append$event_id %in% existing_events$event_id)) {
 
-  sheet_append(
-    ss = SHEET_ID,
-    data = commute_df_append
-  )
-
+  sheet_append(ss = SHEET_ID, data = commute_df_append)
   message("New event appended: ", commute_df_append$event_id)
 
 } else {
