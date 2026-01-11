@@ -22,6 +22,8 @@ jobs:
             lubridate
             dplyr
             purrr
+            httr
+            jsonlite
             magrittr
             tibble
       
