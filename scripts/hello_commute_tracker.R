@@ -20,11 +20,11 @@ suppressPackageStartupMessages({
 
 CONFIG <- yaml::read_yaml("config/commute_config.yml")
 
-if (is.null(CONFIG$business_timezone)) {
+if (is.null(CONFIG$timezone$business_timezone)) {
   stop("Config error: 'business_timezone' is missing from commute_config.yml")
 }
 
-BUSINESS_TZ <- CONFIG$business_timezone
+BUSINESS_TZ <- CONFIG$timezone$business_timezone
 
 if (!BUSINESS_TZ %in% OlsonNames()) {
   stop(
