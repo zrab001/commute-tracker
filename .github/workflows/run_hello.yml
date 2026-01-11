@@ -7,36 +7,49 @@ jobs:
   run-r-script:
     runs-on: ubuntu-latest
 
+    # -----------------------------------------------------------------
+    # NEW FAST METHOD (Active)
+    # Strategy: "The Frozen Dinner"
+    # We download a computer that already has R and Tidyverse installed.
+    # -----------------------------------------------------------------
+    container:
+      image: rocker/tidyverse:latest
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up R
-        uses: r-lib/actions/setup-r@v2
-        with:
-          # DYNAMIC VERSIONING: 
-          # 'release' always fetches the latest stable version from CRAN.
-          # You no longer need to manually update this line.
-          r-version: 'release' 
-          
-          # PERFORMANCE OPTIMIZATION:
-          # This forces the use of pre-compiled Linux binaries.
-          # Without this, 'release' updates might trigger slow source compilations.
-          use-public-rspm: true
+      # -----------------------------------------------------------------
+      # OLD SLOW METHOD (Commented Out)
+      # Strategy: "The Meal Kit" - Building from scratch
+      # -----------------------------------------------------------------
+      # - name: Set up R
+      #   uses: r-lib/actions/setup-r@v2
+      #   with:
+      #     r-version: 'release'
+      #     use-public-rspm: true # This helped, but Docker is faster.
+      #
+      # - name: Install R dependencies (with caching)
+      #   uses: r-lib/actions/setup-r-dependencies@v2
+      #   with:
+      #     cache: true
+      #     packages: |
+      #       googlesheets4
+      #       lubridate
+      #       dplyr
+      #       purrr
+      #       httr
+      #       jsonlite
+      #       magrittr
+      #       tibble
+      # -----------------------------------------------------------------
 
-      - name: Install R dependencies (with caching)
-        uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          cache: true
-          packages: |
-            googlesheets4
-            lubridate
-            dplyr
-            purrr
-            httr
-            jsonlite
-            magrittr
-            tibble
+      # NEW STEP: Patching the Container
+      # The rocker/tidyverse image has almost everything, but misses 'googlesheets4'.
+      # We install JUST this one package.
+      - name: Install missing GoogleSheets4
+        run: |
+          Rscript -e "install.packages('googlesheets4')"
 
       - name: Write Google service account key
         run: |
