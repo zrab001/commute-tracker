@@ -78,7 +78,16 @@ get_route_duration_seconds <- function(origin, destination) {
     )
   }
 
-  parsed$routes[[1]]$legs[[1]]$duration$value
+duration_value <- parsed$routes[[1]]$legs[[1]]$duration$value
+
+if (length(duration_value) != 1 || is.na(duration_value)) {
+  stop(
+    "Directions API returned invalid duration value",
+    call. = FALSE
+  )
+}
+
+duration_value
 }
 
 ############################################
