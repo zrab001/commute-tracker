@@ -58,7 +58,8 @@ get_route_duration_seconds <- function(origin, destination) {
       origin = origin,
       destination = destination,
       mode = "driving",
-      departure_time = "now",
+      departure_time = as.integer(Sys.time()),  # IMPORTANT
+      traffic_model = "best_guess",
       region = "us",
       key = api_key
     )
@@ -78,17 +79,26 @@ get_route_duration_seconds <- function(origin, destination) {
     )
   }
 
-duration_value <- parsed$routes[[1]]$legs[[1]]$duration$value
+  leg <- parsed$routes[[1]]$legs[[1]]
 
-if (length(duration_value) != 1 || is.na(duration_value)) {
-  stop(
-    "Directions API returned invalid duration value",
-    call. = FALSE
-  )
+  duration_seconds <- if (!is.null(leg$duration_in_traffic$value)) {
+    leg$duration_in_traffic$value
+  } else if (!is.null(leg$duration$value)) {
+    leg$duration$value
+  } else {
+    NULL
+  }
+
+  if (length(duration_seconds) != 1 || is.na(duration_seconds)) {
+    stop(
+      "Directions API returned no usable duration value",
+      call. = FALSE
+    )
+  }
+
+  duration_seconds
 }
 
-duration_value
-}
 
 ############################################
 # 3. Main execution
