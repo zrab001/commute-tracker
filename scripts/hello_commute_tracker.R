@@ -45,16 +45,29 @@ collect_commute_metadata <- function() {
     "%Y-%m-%d %H:%M:%S",
     tz = BUSINESS_TZ
   )
-
-  data.frame(
-    run_timestamp_local = run_timestamp_local,  # <-- CHARACTER in NY time
+  ############################################
+  # Determine commute direction (guardrail)
+  ############################################
+  
+  direction <- determine_commute_direction(run_timestamp_local)
+  
+  if (is.na(direction)) {
+    message("Exiting without writing data (outside commute window).")
+    quit(status = 0)
+  }
+  
+  ############################################
+  # Build canonical commute record
+  ############################################
+  
+  return(data.frame(
+    run_timestamp_local = run_timestamp_local,  # NY-local character timestamp
     run_timezone = BUSINESS_TZ,
-    #direction = "to_work",                      # will be automated later
-    direction = determine_commute_direction(run_timestamp_local),
+    direction = direction,
     route_id = "R1",
     preferred_route_id = "R1",
     stringsAsFactors = FALSE
-  )
+  ))
 }
 
 ############################################
@@ -165,12 +178,14 @@ determine_commute_direction <- function(
     return("from_work")
   }
 
-  stop(
-    "Run time outside commute windows (",
-    format(ts, "%H:%M"),
-    "). No data recorded.",
-    call. = FALSE
-  )
+message(
+  "Run time outside commute windows (",
+  format(ts, "%H:%M"),
+  "). No data recorded."
+)
+
+return(NA_character_)
+
 }
 
 ############################################
