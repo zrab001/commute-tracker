@@ -15,12 +15,23 @@ suppressPackageStartupMessages({
 })
 
 ############################################
-# Load configuration
+# Load configuration (with validation)
 ############################################
 
 CONFIG <- yaml::read_yaml("config/commute_config.yml")
 
+if (is.null(CONFIG$business_timezone)) {
+  stop("Config error: 'business_timezone' is missing from commute_config.yml")
+}
+
 BUSINESS_TZ <- CONFIG$business_timezone
+
+if (!BUSINESS_TZ %in% OlsonNames()) {
+  stop(
+    "Config error: 'business_timezone' is not a valid Olson timezone: ",
+    BUSINESS_TZ
+  )
+}
 
 ############################################
 # Source holiday classification logic
