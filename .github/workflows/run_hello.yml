@@ -32,5 +32,6 @@ jobs:
       - name: Run hello_commute_tracker.R
         env:
           GOOGLE_APPLICATION_CREDENTIALS: sa-key.json
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: |
           Rscript scripts/hello_commute_tracker.R
