@@ -37,6 +37,7 @@ jobs:
             jsonlite
             magrittr
             tibble
+            yaml
 
       - name: Write Google service account key
         run: |
