@@ -50,7 +50,7 @@ collect_commute_metadata <- function() {
     run_timestamp_local = run_timestamp_local,  # <-- CHARACTER in NY time
     run_timezone = BUSINESS_TZ,
     #direction = "to_work",                      # will be automated later
-    direction = determine_commute_direction(run_timestamp_local)
+    direction = determine_commute_direction(run_timestamp_local),
     route_id = "R1",
     preferred_route_id = "R1",
     stringsAsFactors = FALSE
