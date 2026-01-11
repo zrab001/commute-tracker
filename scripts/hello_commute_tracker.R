@@ -140,11 +140,24 @@ get_route_duration_seconds <- function(origin, destination) {
   parsed <- jsonlite::fromJSON(
     httr::content(response, as = "text", encoding = "UTF-8")
   )
+  
+  message("Directions API status: ", parsed$status)
+  
+  if (!is.null(parsed$error_message)) {
+    message("Directions API error_message: ", parsed$error_message)
+  }
 
   if (parsed$status != "OK" ||
       length(parsed$routes) == 0 ||
       length(parsed$routes[[1]]$legs) == 0) {
-    stop("Directions API returned no usable route/leg")
+  
+    message(
+      "Directions API returned no usable route/leg (status = ",
+      parsed$status,
+      "). Exiting without recording data."
+    )
+  
+    quit(status = 0)
   }
 
   leg <- parsed$routes[[1]]$legs[[1]]
