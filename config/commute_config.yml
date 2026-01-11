@@ -1,0 +1,45 @@
+# ============================================================
+# Commute Tracker – Runtime Configuration
+# ============================================================
+# This file defines policy-level parameters only.
+# Changing values here alters behavior WITHOUT modifying code.
+# ============================================================
+
+timezone:
+  # Business timezone used for:
+  # - commute window evaluation
+  # - event_id generation
+  # - Google Sheets timestamps
+  business_tz: "America/New_York"
+
+commute_windows:
+  # Morning commute window (home → work)
+  to_work:
+    start: "06:30"   # HH:MM (24-hour, local business time)
+    end:   "09:30"
+
+  # Afternoon commute window (work → home)
+  to_home:
+    start: "12:30"
+    end:   "18:00"
+
+holiday_policy:
+  # ------------------------------------------------------------
+  # Soft holiday rules (private-sector conventions)
+  # These do NOT affect federal holiday classification.
+  # ------------------------------------------------------------
+
+  # Friday immediately following Thanksgiving Day.
+  # Commonly treated as a day off or low-traffic day
+  # in private-sector organizations.
+  include_black_friday: true
+
+  # December 24.
+  # Often observed as a half-day or full day off,
+  # but not a federal holiday.
+  include_christmas_eve: false
+
+  # December 26.
+  # Observed by some organizations when Christmas
+  # falls midweek.
+  include_day_after_christmas: false
