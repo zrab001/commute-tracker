@@ -49,8 +49,8 @@ gs4_auth()
 # Canonical commute addresses
 ############################################
 
-HOME_ADDRESS <- "7501 Cavan Ct, Laurel, MD 20707"
-WORK_ADDRESS <- "8320 Guilford Rd, Columbia, MD 21046"
+HOME_ADDRESS <- CONFIG$address$home_address
+WORK_ADDRESS <- CONFIG$address$work_address
 
 ############################################
 # Helper: parse HH:MM strings into seconds
