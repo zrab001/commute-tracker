@@ -115,7 +115,11 @@ get_route_duration_seconds <- function(origin, destination) {
 
 determine_commute_direction <- function(run_timestamp_local) {
 
-  local_time <- format(run_timestamp_local, "%H:%M")
+  local_time <- strftime(
+  as.POSIXct(run_timestamp_local, tz = "America/New_York"),
+  format = "%H:%M"
+  )
+
 
   if (local_time >= "06:30" && local_time <= "09:30") {
     return("to_work")
