@@ -12,7 +12,7 @@ timezone:
   # - Google Sheets timestamps
   business_timezone: "America/New_York"
 
-adress:
+address:
   home_address: "7501 Cavan Ct, Laurel, MD 20707"
   work_address: "8320 Guilford Rd, Columbia, MD 21046"
 
