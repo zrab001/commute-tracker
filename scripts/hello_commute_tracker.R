@@ -1,5 +1,5 @@
 ############################################
-# Commute Tracker – Live Directions Version
+# Commute Tracker – Live Traffic Version
 ############################################
 
 suppressPackageStartupMessages({
@@ -9,10 +9,10 @@ suppressPackageStartupMessages({
   library(lubridate)
 })
 
-# --- Auth for Google Sheets (service account) ---
+# Authenticate to Google Sheets via service account
 gs4_auth()
 
-# --- Holiday classification helper ---
+# Holiday classification helper
 source("R/holiday_classification.R")
 
 ############################################
@@ -23,7 +23,7 @@ HOME_ADDRESS <- "7501 Cavan Ct, Laurel, MD 20707"
 WORK_ADDRESS <- "8320 Guilford Rd, Columbia, MD 21046"
 
 ############################################
-# 1. collect_commute_metadata()
+# 1. Collect base commute metadata
 ############################################
 
 collect_commute_metadata <- function() {
@@ -34,7 +34,7 @@ collect_commute_metadata <- function() {
   data.frame(
     run_timestamp_local = run_timestamp_local,
     run_timezone = run_timezone,
-    direction = "to_work",           # will be automated later
+    direction = "to_work",     # will be automated later
     route_id = "R1",
     preferred_route_id = "R1",
     stringsAsFactors = FALSE
@@ -42,7 +42,7 @@ collect_commute_metadata <- function() {
 }
 
 ############################################
-# 2. Google Directions API call (hardened)
+# 2. Google Directions API (LIVE, HARDENED)
 ############################################
 
 get_route_duration_seconds <- function(origin, destination) {
@@ -58,7 +58,7 @@ get_route_duration_seconds <- function(origin, destination) {
       origin = origin,
       destination = destination,
       mode = "driving",
-      departure_time = as.integer(Sys.time()),  # IMPORTANT
+      departure_time = as.integer(Sys.time()),
       traffic_model = "best_guess",
       region = "us",
       key = api_key
@@ -68,7 +68,8 @@ get_route_duration_seconds <- function(origin, destination) {
   httr::stop_for_status(response)
 
   parsed <- jsonlite::fromJSON(
-    httr::content(response, as = "text", encoding = "UTF-8")
+    httr::content(response, as = "text", encoding = "UTF-8"),
+    simplifyDataFrame = TRUE
   )
 
   if (parsed$status != "OK" || length(parsed$routes) == 0) {
@@ -81,24 +82,26 @@ get_route_duration_seconds <- function(origin, destination) {
 
   leg <- parsed$routes[[1]]$legs[[1]]
 
-  duration_seconds <- if (!is.null(leg$duration_in_traffic$value)) {
-    leg$duration_in_traffic$value
-  } else if (!is.null(leg$duration$value)) {
-    leg$duration$value
-  } else {
+  # --- Robust duration extraction (THIS IS THE IMPORTANT PART) ---
+  extract_duration_value <- function(x) {
+    if (is.null(x)) return(NULL)
+    if (is.data.frame(x) && "value" %in% names(x)) return(x$value[[1]])
+    if (is.list(x) && !is.null(x$value)) return(x$value)
     NULL
   }
 
-  if (length(duration_seconds) != 1 || is.na(duration_seconds)) {
-    stop(
-      "Directions API returned no usable duration value",
-      call. = FALSE
-    )
+  duration_seconds <- extract_duration_value(leg$duration_in_traffic)
+
+  if (is.null(duration_seconds)) {
+    duration_seconds <- extract_duration_value(leg$duration)
   }
 
-  duration_seconds
-}
+  if (length(duration_seconds) != 1 || is.na(duration_seconds)) {
+    stop("Directions API returned no usable duration value", call. = FALSE)
+  }
 
+  as.integer(duration_seconds)
+}
 
 ############################################
 # 3. Main execution
@@ -108,29 +111,21 @@ cat("Hello from commute-tracker\n")
 cat("Timestamp:", format(Sys.time()), "\n")
 cat("Working directory:", getwd(), "\n\n")
 
-# --- Base metadata ---
+# Base metadata
 commute_df <- collect_commute_metadata()
 
-# --- Resolve direction ---
+# Resolve direction
 origin_address <- if (commute_df$direction == "to_work") HOME_ADDRESS else WORK_ADDRESS
 destination_address <- if (commute_df$direction == "to_work") WORK_ADDRESS else HOME_ADDRESS
 
-# --- Call Directions API (SAFE) ---
+# Live traffic duration
 duration_seconds <- get_route_duration_seconds(
   origin = origin_address,
   destination = destination_address
 )
 
-# --- Build canonical route table (single live route for now) ---
-routes_df <- data.frame(
-  route_id = "R1",
-  estimated_duration_seconds = duration_seconds,
-  is_preferred = TRUE,
-  stringsAsFactors = FALSE
-)
-
 ############################################
-# 4. Final event record (no override yet)
+# 4. Canonical event record
 ############################################
 
 commute_df_final <- cbind(
@@ -147,14 +142,14 @@ commute_df_final <- cbind(
   stringsAsFactors = FALSE
 )
 
-# --- Event ID ---
+# Deterministic event ID
 commute_df_final$event_id <- paste0(
   format(commute_df_final$run_timestamp_local, "%Y%m%d%H%M%S"),
   "_",
   commute_df_final$direction
 )
 
-# --- Day type classification ---
+# Day classification
 commute_df_final$day_type <- determine_us_date_classification(
   date_input_scalar = as.Date(commute_df_final$run_timestamp_local),
   include_black_friday = TRUE,
@@ -163,11 +158,9 @@ commute_df_final$day_type <- determine_us_date_classification(
 )
 
 ############################################
-# 5. Diagnostics
+# 5. Diagnostics (console only)
 ############################################
 
-print(routes_df)
-cat("\n")
 print(commute_df_final)
 cat("\n")
 
