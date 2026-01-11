@@ -49,7 +49,8 @@ collect_commute_metadata <- function() {
   data.frame(
     run_timestamp_local = run_timestamp_local,  # <-- CHARACTER in NY time
     run_timezone = BUSINESS_TZ,
-    direction = "to_work",                      # will be automated later
+    #direction = "to_work",                      # will be automated later
+    direction = determine_commute_direction(run_timestamp_local)
     route_id = "R1",
     preferred_route_id = "R1",
     stringsAsFactors = FALSE
@@ -107,6 +108,28 @@ get_route_duration_seconds <- function(origin, destination) {
   }
 
   as.integer(duration_seconds)
+}
+############################################
+# Helper: determine commute direction
+############################################
+
+determine_commute_direction <- function(run_timestamp_local) {
+
+  local_time <- format(run_timestamp_local, "%H:%M")
+
+  if (local_time >= "06:30" && local_time <= "09:30") {
+    return("to_work")
+  }
+
+  if (local_time >= "15:30" && local_time <= "18:00") {
+    return("from_work")
+  }
+
+  stop(
+    "Run time outside commute windows (",
+    local_time,
+    "). No data recorded."
+  )
 }
 
 ############################################
