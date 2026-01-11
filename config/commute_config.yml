@@ -10,7 +10,11 @@ timezone:
   # - commute window evaluation
   # - event_id generation
   # - Google Sheets timestamps
-  business_tz: "America/New_York"
+  business_timezone: "America/New_York"
+
+adress:
+  home_address: "7501 Cavan Ct, Laurel, MD 20707"
+  work_address: "8320 Guilford Rd, Columbia, MD 21046"
 
 commute_windows:
   # Morning commute window (home → work)
