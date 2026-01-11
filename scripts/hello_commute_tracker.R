@@ -122,7 +122,7 @@ extract_duration_value <- function(duration_obj) {
 get_route_duration_seconds <- function(origin, destination) {
 
   api_key <- Sys.getenv("GOOGLE_MAPS_API_KEY")
-  if (!nzchar(api_key)) stop("GOOGLE_MAPS_API_KEY is not set (GitHub secret + workflow env)")
+  if (!nzchar(api_key)) stop("GOOGLE_MAPS_API_KEY is not set")
 
   response <- httr::GET(
     url = "https://maps.googleapis.com/maps/api/directions/json",
@@ -137,27 +137,33 @@ get_route_duration_seconds <- function(origin, destination) {
 
   httr::stop_for_status(response)
 
-  parsed <- jsonlite::fromJSON(
-    httr::content(response, as = "text", encoding = "UTF-8")
-  )
+  raw_text <- httr::content(response, as = "text", encoding = "UTF-8")
+  parsed <- jsonlite::fromJSON(raw_text)
 
   if (!identical(parsed$status, "OK")) {
+    message("Directions API full response:")
+    print(parsed)
     stop("Directions API error: ", parsed$status)
   }
 
-  # Prefer duration_in_traffic if available, fall back to duration
   leg <- parsed$routes[[1]]$legs[[1]]
 
+  # Prefer traffic-aware duration
   duration_seconds <- extract_duration_value(leg$duration_in_traffic)
+
+  # Fallback to standard duration
   if (is.null(duration_seconds)) {
     duration_seconds <- extract_duration_value(leg$duration)
+    message("Using non-traffic duration fallback")
   }
 
-  if (is.null(duration_seconds) || !is.finite(duration_seconds) || duration_seconds <= 0) {
+  if (is.null(duration_seconds) || !is.finite(duration_seconds)) {
+    message("Directions API leg object:")
+    print(leg)
     stop("Directions API returned no usable duration value")
   }
 
-  duration_seconds
+  as.integer(duration_seconds)
 }
 
 # ----------------------------------------------------------------------------
