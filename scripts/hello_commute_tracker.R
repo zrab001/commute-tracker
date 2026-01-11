@@ -65,6 +65,28 @@ route_definitions <- data.frame(
 #   )
 # }
 
+collect_commute_metadata <- function(direction = "to_work") {
+
+  run_timestamp_local <- Sys.time()
+  run_timezone <- "America/New_York"
+
+  data.frame(
+    run_timestamp_local = run_timestamp_local,
+    run_timezone = run_timezone,
+    direction = direction,
+
+    # These are now placeholders to be populated later
+    route_id = "R1",
+    preferred_route_id = "R1",
+
+    estimated_duration_seconds = NA_real_,
+    baseline_duration_seconds = NA_real_,
+    preferred_route_current_duration_seconds = NA_real_,
+
+    stringsAsFactors = FALSE
+  )
+}
+
 
 get_route_duration_seconds <- function(origin, destination) {
 
