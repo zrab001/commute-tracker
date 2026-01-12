@@ -19,13 +19,13 @@ address:
 commute_windows:
   # Morning commute window (home → work)
   to_work:
-    start: "06:30"   # HH:MM (24-hour, local business time)
-    end:   "09:30"
+    start: "05:55"   # HH:MM (24-hour, local business time)
+    end:   "11:59"
 
   # Afternoon commute window (work → home)
   to_home:
-    start: "12:30"
-    end:   "18:00"
+    start: "12:25"
+    end:   "20:00"
 
 holiday_policy:
   # ------------------------------------------------------------
