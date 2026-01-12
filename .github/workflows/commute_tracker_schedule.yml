@@ -7,20 +7,15 @@ name: run-commute-tracker
 #
 # GitHub Actions cron runs in UTC ONLY.
 #
-# BUSINESS INTENT (EST):
+# SCHEDULE LOGIC (Combined EST + EDT):
 # ------------------------------------------------------------
-# Morning commute (to_work):
-#   06:30 – 09:30 EST  → 11:30 – 14:30 UTC (winter)
+# Morning Window: 05:00 – 11:00 EST (10:00 – 16:00 UTC)
+# Evening Window: 14:00 – 19:00 EST (19:00 – 00:00 UTC)
+# Frequency: Every 10 minutes
 #
-# Evening commute (to_home):
-#   15:30 – 18:00 EST  → 20:30 – 23:00 UTC (winter)
-#
-# Sampling frequency: every 10 minutes
-#
-# IMPORTANT:
-# - R code enforces business windows and soft-exits if outside
-# - Scheduler may fire, but NO DATA is written unless valid
-# - Daylight Saving Time requires manual cron adjustment
+# CONCURRENCY:
+# If a job is still running when the next 10m triggers, 
+# the old job is CANCELLED immediately.
 # ============================================================
 
 on:
@@ -29,32 +24,19 @@ on:
 
   # Scheduled execution (UTC)
   schedule:
-
     # -----------------------------
-    # Morning window (EST → UTC)
+    # Combined Morning & Evening Windows (DST Safe)
     # -----------------------------
+    # 10-15: Runs 10:00 UTC (5am EST) through 15:50 UTC (10:50am EST)
+    # 19-23: Runs 19:00 UTC (2pm EST) through 23:50 UTC (6:50pm EST)
+    - cron: '*/10 10-15,19-23 * * *'
 
-    # 06:30–06:59 EST → 11:30–11:59 UTC
-    - cron: '30/10 11 * * *'
-
-    # 07:00–08:59 EST → 12:00–13:59 UTC
-    - cron: '0/10 12-13 * * *'
-
-    # 09:00–09:30 EST → 14:00–14:30 UTC
-    - cron: '0-30/10 14 * * *'
-
-    # -----------------------------
-    # Evening window (EST → UTC)
-    # -----------------------------
-
-    # 15:30–15:59 EST → 20:30–20:59 UTC
-    - cron: '30/10 20 * * *'
-
-    # 16:00–17:59 EST → 21:00–22:59 UTC
-    - cron: '0/10 21-22 * * *'
-
-    # 18:00 EST → 23:00 UTC
-    - cron: '0/10 23 * * *'
+# ------------------------------------------------------------
+# Concurrency Strategy: "Ruthless Cancel"
+# ------------------------------------------------------------
+concurrency:
+  group: commute-tracker-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   run-commute-tracker:
@@ -63,6 +45,8 @@ jobs:
     env:
       # Used by R for logging only
       BUSINESS_TZ: America/New_York
+      # Explicitly set R_LIBS_USER for caching consistency
+      R_LIBS_USER: ${{ github.workspace }}/R/library
 
     steps:
       # --------------------------------------------------------
@@ -78,6 +62,8 @@ jobs:
         uses: r-lib/actions/setup-r@v2
         with:
           r-version: '4.3'
+          # Tell setup-r to use our custom lib path
+          r-lib-path: ${{ env.R_LIBS_USER }}
 
       # --------------------------------------------------------
       # Restore R package cache (shared across workflows)
@@ -86,7 +72,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.R_LIBS_USER }}
-          key: r-${{ runner.os }}-${{ hashFiles('**/DESCRIPTION') }}
+          key: r-${{ runner.os }}-${{ hashFiles('config/commute_config.yml', 'scripts/**/*.R', 'R/**/*.R') }}
           restore-keys: |
             r-${{ runner.os }}-
 
@@ -96,7 +82,12 @@ jobs:
       - name: Install R dependencies
         run: |
           Rscript -e '
+            # Create library directory if it doesn not exist
+            dir.create(Sys.getenv("R_LIBS_USER"), recursive = TRUE, showWarnings = FALSE)
+            .libPaths(Sys.getenv("R_LIBS_USER"))
+            
             options(repos = c(CRAN = "https://cloud.r-project.org"))
+      
             pkgs <- c(
               "googlesheets4",
               "httr",
@@ -108,7 +99,15 @@ jobs:
               "yaml",
               "tibble"
             )
-            install.packages(pkgs, dependencies = TRUE)
+      
+            # Only install what is missing
+            missing <- pkgs[!pkgs %in% installed.packages()[, "Package"]]
+            if (length(missing)) {
+              install.packages(missing, dependencies = TRUE, lib = Sys.getenv("R_LIBS_USER"))
+            }
+      
+            cat("Installed packages:\n")
+            print(installed.packages(lib.loc = Sys.getenv("R_LIBS_USER"))[pkgs, "Package"])
           '
 
       # --------------------------------------------------------
