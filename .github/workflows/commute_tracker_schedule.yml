@@ -1,53 +1,131 @@
-name: Commute Tracker – Scheduled Runs
+name: run-commute-tracker
+
+# ============================================================
+# Commute Tracker – Scheduled + Manual Execution
+#
+# Business timezone: America/New_York (EST / EDT)
+#
+# GitHub Actions cron runs in UTC ONLY.
+#
+# BUSINESS INTENT (EST):
+# ------------------------------------------------------------
+# Morning commute (to_work):
+#   06:30 – 09:30 EST  → 11:30 – 14:30 UTC (winter)
+#
+# Evening commute (to_home):
+#   15:30 – 18:00 EST  → 20:30 – 23:00 UTC (winter)
+#
+# Sampling frequency: every 10 minutes
+#
+# IMPORTANT:
+# - R code enforces business windows and soft-exits if outside
+# - Scheduler may fire, but NO DATA is written unless valid
+# - Daylight Saving Time requires manual cron adjustment
+# ============================================================
 
 on:
-  schedule:
-    # Morning commute: 06:30–09:30 America/New_York, every 10 minutes
-    - cron: "30-59/10 6 * * *"
-    - cron: "0-59/10 7-8 * * *"
-    - cron: "0-30/10 9 * * *"
-
-    # Evening commute: 15:30–18:00 America/New_York, every 10 minutes
-    - cron: "30-59/10 15 * * *"
-    - cron: "0-59/10 16-17 * * *"
-    - cron: "0-0/10 18 * * *"
-
-  # Manual trigger for testing
+  # Allow manual execution from GitHub UI
   workflow_dispatch:
+
+  # Scheduled execution (UTC)
+  schedule:
+
+    # -----------------------------
+    # Morning window (EST → UTC)
+    # -----------------------------
+
+    # 06:30–06:59 EST → 11:30–11:59 UTC
+    - cron: '30/10 11 * * *'
+
+    # 07:00–08:59 EST → 12:00–13:59 UTC
+    - cron: '0/10 12-13 * * *'
+
+    # 09:00–09:30 EST → 14:00–14:30 UTC
+    - cron: '0-30/10 14 * * *'
+
+    # -----------------------------
+    # Evening window (EST → UTC)
+    # -----------------------------
+
+    # 15:30–15:59 EST → 20:30–20:59 UTC
+    - cron: '30/10 20 * * *'
+
+    # 16:00–17:59 EST → 21:00–22:59 UTC
+    - cron: '0/10 21-22 * * *'
+
+    # 18:00 EST → 23:00 UTC
+    - cron: '0/10 23 * * *'
 
 jobs:
   run-commute-tracker:
     runs-on: ubuntu-latest
 
+    env:
+      # Used by R for logging only
+      BUSINESS_TZ: America/New_York
+
     steps:
+      # --------------------------------------------------------
+      # Checkout repository
+      # --------------------------------------------------------
       - name: Check out repository
         uses: actions/checkout@v4
 
+      # --------------------------------------------------------
+      # Set up R
+      # --------------------------------------------------------
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
-
-      - name: Install R dependencies (cached)
-        uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          packages: |
-            googlesheets4
-            httr
-            jsonlite
-            lubridate
-            dplyr
-            purrr
-            magrittr
-            tibble
-            yaml
+          r-version: '4.3'
 
+      # --------------------------------------------------------
+      # Restore R package cache
+      # Shared across workflows
+      # --------------------------------------------------------
+      - name: Restore R package cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.R_LIBS_USER }}
+          key: r-${{ runner.os }}-${{ hashFiles('**/DESCRIPTION') }}
+          restore-keys: |
+            r-${{ runner.os }}-
+
+      # --------------------------------------------------------
+      # Install R dependencies (cached)
+      # --------------------------------------------------------
+      - name: Install R dependencies
+        run: |
+          Rscript -e '
+            options(repos = c(CRAN = "https://cloud.r-project.org"))
+            pkgs <- c(
+              "googlesheets4",
+              "httr",
+              "jsonlite",
+              "lubridate",
+              "dplyr",
+              "purrr",
+              "magrittr",
+              "yaml",
+              "tibble"
+            )
+            install.packages(pkgs, dependencies = TRUE)
+          '
+
+      # --------------------------------------------------------
+      # Write Google service account key
+      # --------------------------------------------------------
       - name: Write Google service account key
         run: |
-          echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > sa-key.json
+          echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}' > sa-key.json
 
+      # --------------------------------------------------------
+      # Run commute tracker
+      # --------------------------------------------------------
       - name: Run commute tracker
         env:
           GOOGLE_APPLICATION_CREDENTIALS: sa-key.json
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-          TZ: America/New_York
         run: |
           Rscript scripts/hello_commute_tracker.R
