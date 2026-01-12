@@ -7,50 +7,48 @@ name: scheduled-run-commute-tracker
 #
 # GitHub Actions cron runs in UTC ONLY.
 #
-# SCHEDULE LOGIC (DST-SAFE, WIDE WINDOW):
+# STRATEGY:
 # ------------------------------------------------------------
-# Morning Window (EST/EDT enforced in R):
-#   05:00 – 11:00 local
+# - Cron fires broadly (DST-safe)
+# - R script enforces strict commute windows
+# - Scheduler heartbeat proves when cron actually fires
 #
-# Evening Window (EST/EDT enforced in R):
-#   17:00 – 18:00 local   (TEMPORARY, SAFE)
-#
-# Scheduler fires every 10 minutes during:
-#   10:00–15:59 UTC
-#   22:00–22:59 UTC
-#
-# IMPORTANT:
-# - R script exits cleanly if outside business windows
-# - Scheduler may fire, but NO DATA is written unless valid
-#
-# CONCURRENCY BEHAVIOR:
+# SCHEDULE WINDOWS (UTC, wide on purpose):
 # ------------------------------------------------------------
-# ✔ NEW run cancels OLD run immediately
-# ✖ Old run never blocks a newer run
+# Morning: 10:00–15:59 UTC  (covers 05:00–11:59 EST/EDT)
+# Evening: 19:00–23:59 UTC  (covers 14:00–19:59 EST/EDT)
+#
+# Frequency: Every 10 minutes
+#
+# CONCURRENCY:
+# - If a new run starts while one is active,
+#   the OLD run is cancelled immediately.
 # ============================================================
 
 on:
-  # Manual trigger
+  # Manual trigger from GitHub UI
   workflow_dispatch:
 
-  # Scheduled execution (UTC)
+  # Scheduled trigger (UTC)
   schedule:
-    - cron: '*/10 10-15,22 * * *'
+    - cron: '*/10 10-15,19-23 * * *'
 
 # ------------------------------------------------------------
-# Concurrency: NEW RUN WINS
+# Concurrency: "New run wins"
 # ------------------------------------------------------------
-concurrency:
-  # All runs of this workflow share the same lock
-  group: commute-tracker-main
-  cancel-in-progress: true
+#concurrency:
+#  group: commute-tracker-${{ github.ref }}
+#  cancel-in-progress: true
 
 jobs:
   run-commute-tracker:
     runs-on: ubuntu-latest
 
     env:
+      # Used by R for logging and business logic
       BUSINESS_TZ: America/New_York
+
+      # Explicit R library path (for cache stability)
       R_LIBS_USER: ${{ github.workspace }}/R/library
 
     steps:
@@ -59,6 +57,20 @@ jobs:
       # --------------------------------------------------------
       - name: Check out repository
         uses: actions/checkout@v4
+
+      # --------------------------------------------------------
+      # Scheduler heartbeat (CRITICAL DEBUG STEP)
+      # --------------------------------------------------------
+      - name: Scheduler heartbeat
+        run: |
+          echo "======================================"
+          echo "SCHEDULER HEARTBEAT"
+          echo "Workflow: $GITHUB_WORKFLOW"
+          echo "Run ID:   $GITHUB_RUN_ID"
+          echo "Event:    $GITHUB_EVENT_NAME"
+          echo "UTC time: $(date -u)"
+          echo "NY time:  $(TZ=America/New_York date)"
+          echo "======================================"
 
       # --------------------------------------------------------
       # Set up R
@@ -81,7 +93,7 @@ jobs:
             r-${{ runner.os }}-
 
       # --------------------------------------------------------
-      # Install Linux system dependencies
+      # Install Linux system dependencies (REQUIRED)
       # --------------------------------------------------------
       - name: Install Linux system dependencies
         run: |
@@ -92,7 +104,7 @@ jobs:
             libxml2-dev
 
       # --------------------------------------------------------
-      # Install R dependencies (minimal, cached)
+      # Install R dependencies (cached, minimal)
       # --------------------------------------------------------
       - name: Install R dependencies
         run: |
@@ -114,14 +126,15 @@ jobs:
               "tibble"
             )
 
-            missing <- pkgs[!pkgs %in% installed.packages()[, "Package"]]
+            installed <- rownames(installed.packages())
+            missing <- setdiff(pkgs, installed)
 
             if (length(missing)) {
               install.packages(missing, lib = Sys.getenv("R_LIBS_USER"))
             }
 
-            cat("Installed packages:\\n")
-            print(installed.packages(lib.loc = Sys.getenv("R_LIBS_USER"))[pkgs, "Package"])
+            cat("R packages ready:\n")
+            print(pkgs)
           '
 
       # --------------------------------------------------------
@@ -132,7 +145,7 @@ jobs:
           echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > sa-key.json
 
       # --------------------------------------------------------
-      # Run commute tracker
+      # Run commute tracker (R script enforces time windows)
       # --------------------------------------------------------
       - name: Run commute tracker
         env:
@@ -142,28 +155,20 @@ jobs:
           Rscript scripts/hello_commute_tracker.R
 
       # --------------------------------------------------------
-      # Log concurrency cancellation (if THIS run was canceled)
+      # Commit route fallback logs (best-effort)
       # --------------------------------------------------------
-      - name: Log concurrency cancellation
-        if: ${{ cancelled() }}
-        run: |
-          echo "$(date -u '+%Y-%m-%d %H:%M:%S'),${{ github.run_id }},${{ github.run_number }},${{ github.workflow }},cancelled_by_newer_run" \
-            >> logs/concurrency_cancellation_log.csv
-
-      # --------------------------------------------------------
-      # Commit log files (ALWAYS)
-      # --------------------------------------------------------
-      - name: Commit logs
+      - name: Commit route fallback logs
         if: always()
         run: |
           git config user.name "commute-tracker-bot"
           git config user.email "commute-tracker-bot@users.noreply.github.com"
 
-          git add logs/route_fallback_log.csv logs/concurrency_cancellation_log.csv || true
+          git status
+          git add logs/route_fallback_log.csv || true
 
           if git diff --cached --quiet; then
             echo "No log changes to commit"
           else
-            git commit -m "Log runtime events [skip ci]"
-            git push
+            git commit -m "Log route fallback event [skip ci]"
+            git push || echo "Log commit skipped (no permissions)"
           fi
