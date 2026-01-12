@@ -13,12 +13,12 @@ permissions:
 # SCHEDULE LOGIC (Combined EST + EDT):
 # ------------------------------------------------------------
 # Morning Window: 05:00 – 11:00 EST (10:00 – 16:00 UTC)
-#
-# ** TEMPORARY CHANGE **
-# Evening Window: 17:00 – 18:00 EST (22:00 – 23:00 UTC)
-# (Restricted to 5-6 PM EST to avoid conflict with manual testing)
-#
+# Evening Window: 14:00 – 19:00 EST (19:00 – 00:00 UTC)
 # Frequency: Every 10 minutes
+#
+# CONCURRENCY:
+# If a job is still running when the next 10m triggers, 
+# the old job is CANCELLED immediately.
 # ============================================================
 
 on:
@@ -28,10 +28,11 @@ on:
   # Scheduled execution (UTC)
   schedule:
     # -----------------------------
-    # Morning: 10:00 - 15:59 UTC (05:00 - 10:59 EST)
-    # Evening: 22:00 - 22:59 UTC (17:00 - 17:59 EST)
+    # Combined Morning & Evening Windows (DST Safe)
     # -----------------------------
-    - cron: '*/10 10-15,22 * * *'
+    # 10-15: Runs 10:00 UTC (5am EST) through 15:50 UTC (10:50am EST)
+    # 19-23: Runs 19:00 UTC (2pm EST) through 23:50 UTC (6:50pm EST)
+    - cron: '*/10 10-15,19-23 * * *'
 
 # ------------------------------------------------------------
 # Concurrency Strategy: "Ruthless Cancel"
