@@ -9,7 +9,10 @@ suppressPackageStartupMessages({
   library(jsonlite)
   library(lubridate)
   library(dplyr)
+  library(purrr)
+  library(magrittr)
   library(yaml)
+  library(tibble)
 })
 
 ############################################
@@ -25,28 +28,24 @@ TO_WORK_WINDOW <- CONFIG$commute_windows$to_work
 TO_HOME_WINDOW <- CONFIG$commute_windows$to_home
 HOLIDAY_POLICY <- CONFIG$holiday_policy
 
-############################################
-# Validation
-############################################
-
 if (!BUSINESS_TZ %in% OlsonNames()) {
-  stop("Invalid timezone in config: ", BUSINESS_TZ)
+  stop("Invalid business timezone: ", BUSINESS_TZ)
 }
 
 ############################################
-# Holiday classification
+# Source holiday classification
 ############################################
 
 source("R/holiday_classification.R")
 
 ############################################
-# Google Sheets auth (service account)
+# Google Sheets auth (non-interactive)
 ############################################
 
-gs4_auth()
+gs4_auth(path = Sys.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 
 ############################################
-# Helper: HH:MM → seconds
+# Utility: HH:MM → seconds
 ############################################
 
 parse_hhmm_to_seconds <- function(hhmm) {
@@ -55,22 +54,28 @@ parse_hhmm_to_seconds <- function(hhmm) {
 }
 
 ############################################
-# Helper: commute direction
+# Determine commute direction
 ############################################
 
-determine_commute_direction <- function(run_timestamp_local_chr) {
+determine_commute_direction <- function(run_ts_chr) {
 
-  ts <- as.POSIXct(run_timestamp_local_chr, tz = BUSINESS_TZ)
+  ts <- as.POSIXct(run_ts_chr, tz = BUSINESS_TZ)
 
-  sec <- hour(ts) * 3600 + minute(ts) * 60
+  seconds_since_midnight <- hour(ts) * 3600 + minute(ts) * 60
 
-  if (sec >= parse_hhmm_to_seconds(TO_WORK_WINDOW$start) &&
-      sec <= parse_hhmm_to_seconds(TO_WORK_WINDOW$end)) {
+  to_work_start <- parse_hhmm_to_seconds(TO_WORK_WINDOW$start)
+  to_work_end   <- parse_hhmm_to_seconds(TO_WORK_WINDOW$end)
+
+  to_home_start <- parse_hhmm_to_seconds(TO_HOME_WINDOW$start)
+  to_home_end   <- parse_hhmm_to_seconds(TO_HOME_WINDOW$end)
+
+  if (seconds_since_midnight >= to_work_start &&
+      seconds_since_midnight <= to_work_end) {
     return("to_work")
   }
 
-  if (sec >= parse_hhmm_to_seconds(TO_HOME_WINDOW$start) &&
-      sec <= parse_hhmm_to_seconds(TO_HOME_WINDOW$end)) {
+  if (seconds_since_midnight >= to_home_start &&
+      seconds_since_midnight <= to_home_end) {
     return("to_home")
   }
 
@@ -78,77 +83,82 @@ determine_commute_direction <- function(run_timestamp_local_chr) {
 }
 
 ############################################
-# Fallback logger (CSV + console)
+# ROUTE FALLBACK LOGGER (console + CSV)
 ############################################
 
 log_route_fallback <- function(
-  run_timestamp_local,
-  direction,
+  attempt,
+  reason,
+  action,
   origin,
-  destination,
-  attempted_mode,
-  failure_reason,
-  outcome
+  destination
 ) {
+  log_path <- "logs/route_fallback_log.csv"
+  dir.create("logs", showWarnings = FALSE)
 
-  message(
-    "[ROUTE_FALLBACK] ",
-    attempted_mode, " | ",
-    failure_reason, " | ",
-    outcome
+  entry <- tibble(
+    timestamp_utc = format(Sys.time(), "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+    attempt = attempt,
+    reason = reason,
+    action = action,
+    origin = origin,
+    destination = destination
   )
 
-  log_entry <- data.frame(
-    log_timestamp_utc = format(Sys.time(), "%Y-%m-%d %H:%M:%S", tz = "UTC"),
-    business_timezone = BUSINESS_TZ,
-    run_timestamp_local = run_timestamp_local,
-    direction = direction,
-    origin_address = origin,
-    destination_address = destination,
-    attempted_mode = attempted_mode,
-    failure_reason = failure_reason,
-    outcome = outcome,
-    stringsAsFactors = FALSE
-  )
+  if (!file.exists(log_path)) {
+    write.table(
+      entry,
+      log_path,
+      sep = ",",
+      row.names = FALSE,
+      col.names = TRUE,
+      append = FALSE
+    )
+  } else {
+    write.table(
+      entry,
+      log_path,
+      sep = ",",
+      row.names = FALSE,
+      col.names = FALSE,
+      append = TRUE
+    )
+  }
 
-  log_file <- "logs/route_fallbacks.csv"
-
-  write.table(
-    log_entry,
-    file = log_file,
-    sep = ",",
-    row.names = FALSE,
-    col.names = !file.exists(log_file) || file.size(log_file) == 0,
-    append = TRUE
-  )
+  message(sprintf(
+    "[ROUTE_FALLBACK] %s | %s | %s",
+    attempt, reason, action
+  ))
 }
 
 ############################################
-# Extract duration safely
+# Safe duration extraction
 ############################################
 
 extract_duration_value <- function(x) {
   if (is.null(x)) return(NULL)
-  if (is.list(x) && !is.null(x$value)) return(as.numeric(x$value))
-  if (is.data.frame(x) && "value" %in% names(x)) return(as.numeric(x$value[1]))
+
+  if (is.list(x) && !is.null(x$value)) {
+    return(as.numeric(x$value))
+  }
+
+  if (is.data.frame(x) && "value" %in% names(x)) {
+    return(as.numeric(x$value[1]))
+  }
+
   NULL
 }
 
 ############################################
-# Google Directions API (robust)
+# Google Directions API
 ############################################
 
-get_route_duration_seconds <- function(
-  origin,
-  destination,
-  run_timestamp_local,
-  direction
-) {
+get_route_duration_seconds <- function(origin, destination) {
 
   api_key <- Sys.getenv("GOOGLE_MAPS_API_KEY")
   if (api_key == "") stop("GOOGLE_MAPS_API_KEY is not set")
 
-  response <- GET(
+  response <- httr::GET(
     "https://maps.googleapis.com/maps/api/directions/json",
     query = list(
       origin = origin,
@@ -159,21 +169,17 @@ get_route_duration_seconds <- function(
     )
   )
 
-  stop_for_status(response)
+  httr::stop_for_status(response)
 
-  parsed <- fromJSON(content(response, "text", encoding = "UTF-8"))
+  parsed <- jsonlite::fromJSON(
+    httr::content(response, as = "text", encoding = "UTF-8")
+  )
 
   message("Directions API status: ", parsed$status)
 
   if (parsed$status != "OK" || length(parsed$routes) == 0) {
     log_route_fallback(
-      run_timestamp_local,
-      direction,
-      origin,
-      destination,
-      "traffic",
-      "no_routes",
-      "abort"
+      "traffic", "no_routes", "abort", origin, destination
     )
     quit(status = 0)
   }
@@ -182,74 +188,44 @@ get_route_duration_seconds <- function(
 
   if (is.null(legs) || length(legs) == 0) {
     log_route_fallback(
-      run_timestamp_local,
-      direction,
-      origin,
-      destination,
-      "traffic",
-      "no_legs",
-      "abort"
+      "traffic", "no_legs", "abort", origin, destination
     )
     quit(status = 0)
   }
 
   leg <- if (is.data.frame(legs)) legs[1, ] else legs[[1]]
 
-  duration <- extract_duration_value(leg$duration_in_traffic)
+  duration_seconds <- extract_duration_value(leg$duration_in_traffic)
 
-  if (!is.null(duration)) {
-    return(duration)
-  }
-
-  log_route_fallback(
-    run_timestamp_local,
-    direction,
-    origin,
-    destination,
-    "traffic",
-    "no_duration_in_traffic",
-    "fallback_non_traffic"
-  )
-
-  duration <- extract_duration_value(leg$duration)
-
-  if (!is.null(duration)) {
+  if (is.null(duration_seconds)) {
     log_route_fallback(
-      run_timestamp_local,
-      direction,
-      origin,
-      destination,
-      "non_traffic",
-      "traffic_missing",
-      "recovered"
+      "traffic", "no_duration_in_traffic", "fallback", origin, destination
     )
-    return(duration)
+    duration_seconds <- extract_duration_value(leg$duration)
   }
 
-  log_route_fallback(
-    run_timestamp_local,
-    direction,
-    origin,
-    destination,
-    "non_traffic",
-    "no_duration",
-    "abort"
-  )
+  if (is.null(duration_seconds) || is.na(duration_seconds)) {
+    log_route_fallback(
+      "fallback", "no_duration", "abort", origin, destination
+    )
+    quit(status = 0)
+  }
 
-  quit(status = 0)
+  duration_seconds
 }
 
 ############################################
-# Collect base metadata
+# Collect commute metadata
 ############################################
 
 collect_commute_metadata <- function() {
 
-  now_posix <- with_tz(Sys.time(), BUSINESS_TZ)
+  run_posix <- with_tz(Sys.time(), BUSINESS_TZ)
 
   run_timestamp_local <- format(
-    now_posix,
-    "%Y-%m-%d %H:%M:%S"
+    run_posix,
+    "%Y-%m-%d %H:%M:%S",
+    tz = BUSINESS_TZ
   )
 
   direction <- determine_commute_direction(run_timestamp_local)
@@ -257,24 +233,23 @@ collect_commute_metadata <- function() {
   if (is.na(direction)) {
     message(
       "Run time outside commute windows (",
-      format(now_posix, "%H:%M"),
-      "). Exiting."
+      format(run_posix, "%H:%M"),
+      "). No data recorded."
     )
     quit(status = 0)
   }
 
-  data.frame(
+  tibble(
     run_timestamp_local = run_timestamp_local,
     run_timezone = BUSINESS_TZ,
     direction = direction,
     route_id = "R1",
-    preferred_route_id = "R1",
-    stringsAsFactors = FALSE
+    preferred_route_id = "R1"
   )
 }
 
 ############################################
-# MAIN
+# MAIN EXECUTION
 ############################################
 
 cat("Hello from commute-tracker\n")
@@ -289,12 +264,8 @@ origin_address <-
 destination_address <-
   if (commute_df$direction == "to_work") WORK_ADDRESS else HOME_ADDRESS
 
-duration_seconds <- get_route_duration_seconds(
-  origin_address,
-  destination_address,
-  commute_df$run_timestamp_local,
-  commute_df$direction
-)
+duration_seconds <-
+  get_route_duration_seconds(origin_address, destination_address)
 
 commute_df_final <- commute_df %>%
   mutate(
@@ -314,24 +285,37 @@ commute_df_final <- commute_df %>%
       direction
     ),
     day_type = determine_us_date_classification(
-      as.Date(run_timestamp_local),
-      HOLIDAY_POLICY$include_black_friday,
-      HOLIDAY_POLICY$include_christmas_eve,
-      HOLIDAY_POLICY$include_day_after_christmas
+      date_input_scalar = as.Date(run_timestamp_local),
+      include_black_friday = HOLIDAY_POLICY$include_black_friday,
+      include_christmas_eve = HOLIDAY_POLICY$include_christmas_eve,
+      include_day_after_christmas =
+        HOLIDAY_POLICY$include_day_after_christmas
     )
   )
 
 ############################################
-# Append to Google Sheets (idempotent)
+# Append to Google Sheet (idempotent)
 ############################################
 
 SHEET_ID <- "1H2v-4LtmCDUu534Qo81d8IxZ4efsGJoNZ2b7RaBK2Ro"
 
-existing <- read_sheet(SHEET_ID, range = "A:A", col_names = "event_id")
+existing_events <- read_sheet(
+  ss = SHEET_ID,
+  range = "A:A",
+  col_names = "event_id"
+)
 
-if (!(commute_df_final$event_id %in% existing$event_id)) {
-  sheet_append(SHEET_ID, commute_df_final)
+if (!(commute_df_final$event_id %in% existing_events$event_id)) {
+
+  sheet_append(
+    ss = SHEET_ID,
+    data = commute_df_final
+  )
+
   message("New event appended: ", commute_df_final$event_id)
+
 } else {
-  message("Event already exists, skipping append.")
+
+  message("Event already exists, skipping append: ",
+          commute_df_final$event_id)
 }
