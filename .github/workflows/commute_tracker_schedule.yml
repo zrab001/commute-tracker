@@ -134,7 +134,8 @@ jobs:
       # --------------------------------------------------------
       - name: Run commute tracker
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: sa-key.json
+          # This variable tells R where the key is automatically
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/sa-key.json
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: |
           Rscript scripts/hello_commute_tracker.R
