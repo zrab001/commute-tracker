@@ -72,9 +72,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.R_LIBS_USER }}
+          # Hash config/scripts so we invalidate cache if dependencies change
           key: r-${{ runner.os }}-${{ hashFiles('config/commute_config.yml', 'scripts/**/*.R', 'R/**/*.R') }}
           restore-keys: |
             r-${{ runner.os }}-
+
+      # --------------------------------------------------------
+      # NEW: Install Linux system dependencies
+      # Required for curl, httr, and openssl to compile
+      # --------------------------------------------------------
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev
 
       # --------------------------------------------------------
       # Install R dependencies (cached)
@@ -82,7 +92,7 @@ jobs:
       - name: Install R dependencies
         run: |
           Rscript -e '
-            # Create library directory if it doesn not exist
+            # Create library directory if it does not exist
             dir.create(Sys.getenv("R_LIBS_USER"), recursive = TRUE, showWarnings = FALSE)
             .libPaths(Sys.getenv("R_LIBS_USER"))
             
@@ -102,8 +112,10 @@ jobs:
       
             # Only install what is missing
             missing <- pkgs[!pkgs %in% installed.packages()[, "Package"]]
+            
             if (length(missing)) {
-              install.packages(missing, dependencies = TRUE, lib = Sys.getenv("R_LIBS_USER"))
+              # FIXED: Removed "dependencies = TRUE" to avoid installing heavy "Suggests" packages (sf, jpeg)
+              install.packages(missing, lib = Sys.getenv("R_LIBS_USER"))
             }
       
             cat("Installed packages:\n")
