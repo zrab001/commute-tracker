@@ -1,5 +1,8 @@
 name: scheduled-run-commute-tracker
 
+permissions:
+  contents: write
+
 # ============================================================
 # Commute Tracker – Scheduled + Manual Execution
 #
