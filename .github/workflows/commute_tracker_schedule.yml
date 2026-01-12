@@ -80,14 +80,12 @@ jobs:
           r-version: '4.3'
 
       # --------------------------------------------------------
-      # Restore R package cache
-      # Shared across workflows
+      # Restore R package cache (shared across workflows)
       # --------------------------------------------------------
       - name: Restore R package cache
         uses: actions/cache@v4
         with:
-          path: |
-            ${{ env.R_LIBS_USER }}
+          path: ${{ env.R_LIBS_USER }}
           key: r-${{ runner.os }}-${{ hashFiles('**/DESCRIPTION') }}
           restore-keys: |
             r-${{ runner.os }}-
@@ -129,3 +127,22 @@ jobs:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: |
           Rscript scripts/hello_commute_tracker.R
+
+      # --------------------------------------------------------
+      # Commit route fallback logs (ALWAYS)
+      # --------------------------------------------------------
+      - name: Commit route fallback logs
+        if: always()
+        run: |
+          git config user.name "commute-tracker-bot"
+          git config user.email "commute-tracker-bot@users.noreply.github.com"
+
+          git status
+          git add logs/route_fallback_log.csv || true
+
+          if git diff --cached --quiet; then
+            echo "No log changes to commit"
+          else
+            git commit -m "Log route fallback event [skip ci]"
+            git push
+          fi
