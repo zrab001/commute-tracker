@@ -1,8 +1,5 @@
 name: scheduled-run-commute-tracker
 
-permissions:
-  contents: write
-
 # ============================================================
 # Commute Tracker – Scheduled + Manual Execution
 #
@@ -10,35 +7,42 @@ permissions:
 #
 # GitHub Actions cron runs in UTC ONLY.
 #
-# SCHEDULE LOGIC (Combined EST + EDT):
+# SCHEDULE LOGIC (DST-SAFE, WIDE WINDOW):
 # ------------------------------------------------------------
-# Morning Window: 05:00 – 11:00 EST (10:00 – 16:00 UTC)
-# Evening Window: 14:00 – 19:00 EST (19:00 – 00:00 UTC)
-# Frequency: Every 10 minutes
+# Morning Window (EST/EDT enforced in R):
+#   05:00 – 11:00 local
 #
-# CONCURRENCY:
-# If a job is still running when the next 10m triggers, 
-# the old job is CANCELLED immediately.
+# Evening Window (EST/EDT enforced in R):
+#   17:00 – 18:00 local   (TEMPORARY, SAFE)
+#
+# Scheduler fires every 10 minutes during:
+#   10:00–15:59 UTC
+#   22:00–22:59 UTC
+#
+# IMPORTANT:
+# - R script exits cleanly if outside business windows
+# - Scheduler may fire, but NO DATA is written unless valid
+#
+# CONCURRENCY BEHAVIOR:
+# ------------------------------------------------------------
+# ✔ NEW run cancels OLD run immediately
+# ✖ Old run never blocks a newer run
 # ============================================================
 
 on:
-  # Allow manual execution from GitHub UI
+  # Manual trigger
   workflow_dispatch:
 
   # Scheduled execution (UTC)
   schedule:
-    # -----------------------------
-    # Combined Morning & Evening Windows (DST Safe)
-    # -----------------------------
-    # 10-15: Runs 10:00 UTC (5am EST) through 15:50 UTC (10:50am EST)
-    # 19-23: Runs 19:00 UTC (2pm EST) through 23:50 UTC (6:50pm EST)
-    - cron: '*/10 10-15,19-23 * * *'
+    - cron: '*/10 10-15,22 * * *'
 
 # ------------------------------------------------------------
-# Concurrency Strategy: "Ruthless Cancel"
+# Concurrency: NEW RUN WINS
 # ------------------------------------------------------------
 concurrency:
-  group: commute-tracker-${{ github.ref }}
+  # All runs of this workflow share the same lock
+  group: commute-tracker-main
   cancel-in-progress: true
 
 jobs:
@@ -46,9 +50,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # Used by R for logging only
       BUSINESS_TZ: America/New_York
-      # Explicitly set R_LIBS_USER for caching consistency
       R_LIBS_USER: ${{ github.workspace }}/R/library
 
     steps:
@@ -65,42 +67,41 @@ jobs:
         uses: r-lib/actions/setup-r@v2
         with:
           r-version: '4.3'
-          # Tell setup-r to use our custom lib path
           r-lib-path: ${{ env.R_LIBS_USER }}
 
       # --------------------------------------------------------
-      # Restore R package cache (shared across workflows)
+      # Restore R package cache
       # --------------------------------------------------------
       - name: Restore R package cache
         uses: actions/cache@v4
         with:
           path: ${{ env.R_LIBS_USER }}
-          # Hash config/scripts so we invalidate cache if dependencies change
           key: r-${{ runner.os }}-${{ hashFiles('config/commute_config.yml', 'scripts/**/*.R', 'R/**/*.R') }}
           restore-keys: |
             r-${{ runner.os }}-
 
       # --------------------------------------------------------
-      # FIX 1: Install Linux system dependencies
-      # Required for curl, httr, and openssl to compile
+      # Install Linux system dependencies
       # --------------------------------------------------------
       - name: Install Linux system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev
+          sudo apt-get install -y \
+            libcurl4-openssl-dev \
+            libssl-dev \
+            libxml2-dev
 
       # --------------------------------------------------------
-      # Install R dependencies (cached)
+      # Install R dependencies (minimal, cached)
       # --------------------------------------------------------
       - name: Install R dependencies
         run: |
           Rscript -e '
-            # Create library directory if it does not exist
             dir.create(Sys.getenv("R_LIBS_USER"), recursive = TRUE, showWarnings = FALSE)
             .libPaths(Sys.getenv("R_LIBS_USER"))
-            
+
             options(repos = c(CRAN = "https://cloud.r-project.org"))
-      
+
             pkgs <- c(
               "googlesheets4",
               "httr",
@@ -112,16 +113,14 @@ jobs:
               "yaml",
               "tibble"
             )
-      
-            # Only install what is missing
+
             missing <- pkgs[!pkgs %in% installed.packages()[, "Package"]]
-            
+
             if (length(missing)) {
-              # FIX 2: Removed "dependencies = TRUE" to avoid installing heavy "Suggests" packages
               install.packages(missing, lib = Sys.getenv("R_LIBS_USER"))
             }
-      
-            cat("Installed packages:\n")
+
+            cat("Installed packages:\\n")
             print(installed.packages(lib.loc = Sys.getenv("R_LIBS_USER"))[pkgs, "Package"])
           '
 
@@ -130,7 +129,6 @@ jobs:
       # --------------------------------------------------------
       - name: Write Google service account key
         run: |
-          # FIX 3: Updated secret name to match your GitHub Settings (JSON instead of KEY)
           echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > sa-key.json
 
       # --------------------------------------------------------
@@ -138,27 +136,34 @@ jobs:
       # --------------------------------------------------------
       - name: Run commute tracker
         env:
-          # This variable tells R where the key is automatically
           GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/sa-key.json
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: |
           Rscript scripts/hello_commute_tracker.R
 
       # --------------------------------------------------------
-      # Commit route fallback logs (ALWAYS)
+      # Log concurrency cancellation (if THIS run was canceled)
       # --------------------------------------------------------
-      - name: Commit route fallback logs
+      - name: Log concurrency cancellation
+        if: ${{ cancelled() }}
+        run: |
+          echo "$(date -u '+%Y-%m-%d %H:%M:%S'),${{ github.run_id }},${{ github.run_number }},${{ github.workflow }},cancelled_by_newer_run" \
+            >> logs/concurrency_cancellation_log.csv
+
+      # --------------------------------------------------------
+      # Commit log files (ALWAYS)
+      # --------------------------------------------------------
+      - name: Commit logs
         if: always()
         run: |
           git config user.name "commute-tracker-bot"
           git config user.email "commute-tracker-bot@users.noreply.github.com"
 
-          git status
-          git add logs/route_fallback_log.csv || true
+          git add logs/route_fallback_log.csv logs/concurrency_cancellation_log.csv || true
 
           if git diff --cached --quiet; then
             echo "No log changes to commit"
           else
-            git commit -m "Log route fallback event [skip ci]"
+            git commit -m "Log runtime events [skip ci]"
             git push
           fi
