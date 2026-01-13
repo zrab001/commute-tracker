@@ -184,7 +184,7 @@ get_route_duration_seconds <- function(origin, destination) {
     quit(status = 0)
   }
 
-  legs <- parsed$routes[[1]]$legs
+  legs <- parsed$routes$legs[[1]]
 
   if (is.null(legs) || length(legs) == 0) {
     log_route_fallback(
