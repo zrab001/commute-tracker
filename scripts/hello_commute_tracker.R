@@ -389,7 +389,26 @@ commute_df_final <- commute_df %>%
       include_day_after_christmas =
         HOLIDAY_POLICY$include_day_after_christmas
     )
-  )
+  ) %>%
+  # --- FIX 2: FORCE COLUMN ORDER TO MATCH GOOGLE SHEET ---
+  select(
+    event_id,
+    run_timestamp_local,
+    run_timezone,
+    direction,
+    origin_address,
+    destination_address,
+    route_id,
+    preferred_route_id,
+    estimated_duration_seconds,
+    baseline_duration_seconds,
+    preferred_route_current_duration_seconds,
+    override_flag,
+    preferred_delay_seconds,
+    delta_seconds,
+    selected_route_id,
+    day_type
+  )  
 
 ############################################
 # Append to Google Sheet (idempotent)
